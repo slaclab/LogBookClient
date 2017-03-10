@@ -1,0 +1,2804 @@
+#!/usr/bin/env python
+
+#--------------------------------------------------------------------------
+# Description:
+#   LogBookGrabber_qt.py
+#------------------------------------------------------------------------
+"""Qt-based GUI application to submit messages with attachements in LogBook (ELog)
+
+This software was developed for the SIT project.  If you use all or 
+part of it, please give an appropriate acknowledgment.
+
+@see LogBookWebService.py
+
+@version $Id: LogBookGrabber_qt 12651 2016-09-22 22:59:52Z mshankar@SLAC.STANFORD.EDU $
+
+@author Mikhail S. Dubrovin
+"""
+
+#--------------------------------
+__version__ = "V2015-05-15"
+#--------------------------------
+#  Imports of standard modules --
+#--------------------------------
+import sys
+import os
+import pwd
+import tempfile
+from copy import deepcopy
+from time import time, localtime, strftime
+
+from PyQt4 import QtGui, QtCore
+from time import sleep
+#import time   # for sleep(sec)
+
+#-----------------------------
+# Imports for other modules --
+#-----------------------------
+
+class Logger :
+    """Is intended as a log-book keeper.
+    """
+    name = 'Logger'
+
+    def __init__ ( self, fname=None, level='info' ) :
+        """Constructor.
+        @param fname  the file name for output log file
+        """
+        self.levels = ['debug','info','warning','error','crytical']
+        self.setLevel(level)
+        self.selectionIsOn = True # It is used to get total log content
+        
+        self.log = []
+        self.startLog(fname)
+
+
+    def setLevel(self, level):
+        """Sets the threshold level of messages for record selection algorithm"""
+        self.level_thr     = level
+        self.level_thr_ind = self.levels.index(level)
+
+
+    def getListOfLevels(self):
+        return self.levels
+
+
+    def getLevel(self):
+        return self.level_thr
+
+
+    def getLogFileName(self):
+        return self.fname
+
+
+    def getLogTotalFileName(self):
+        return self.fname_total
+
+
+    def getStrStartTime(self):
+        return self.str_start_time
+
+
+    def debug   ( self, msg, name=None ) : self._message(msg, 0, name)
+
+    def info    ( self, msg, name=None ) : self._message(msg, 1, name)
+
+    def warning ( self, msg, name=None ) : self._message(msg, 2, name)
+
+    def error   ( self, msg, name=None ) : self._message(msg, 3, name)
+
+    def crytical( self, msg, name=None ) : self._message(msg, 4, name)
+
+    def _message ( self, msg, index, name=None ) :
+        """Store input message the 2D tuple of records, send request to append GUI.
+        """
+        tstamp    = self.timeStamp()
+        level     = self.levels[index] 
+        rec       = [tstamp, level, index, name, msg]
+        self.log.append(rec)
+
+        if self.recordIsSelected( rec ) :         
+            str_msg = self.stringForRecord(rec)
+            self.appendGUILog(str_msg)
+            #print str_msg
+
+
+    def recordIsSelected( self, rec ):
+        """Apply selection algorithms for each record:
+           returns True if the record is passed,
+                   False - the record is discarded from selected log content.
+        """
+        if not self.selectionIsOn       : return True
+        if rec[2] < self.level_thr_ind  : return False
+        else                            : return True
+
+
+    def stringForRecord( self, rec ):
+        """Returns the strind presentation of the log record, which intrinsically is a tuple."""
+        tstamp, level, index, name, msg = rec
+        self.msg_tot = '' 
+        if name is not None :
+            self.msg_tot  = tstamp
+            self.msg_tot += ' (' + level + ') '
+            self.msg_tot += name + ': '
+        else :
+            self.msg_tot += ': '
+        self.msg_tot += msg
+        return self.msg_tot
+
+
+    def appendGUILog(self, msg='') :
+        """Append message in GUI, if it is available"""
+        try    : self.guilogger.appendGUILog(msg)
+        except : pass
+
+
+    def setGUILogger(self, guilogger) :
+        """Receives the reference to GUI"""
+        self.guilogger = guilogger
+
+
+    def timeStamp( self, fmt='%Y-%m-%d %H:%M:%S' ) : # '%Y-%m-%d %H:%M:%S %Z'
+        return strftime(fmt, localtime())
+
+
+    def startLog(self, fname=None) :
+        """Logger initialization at start"""
+        self.str_start_time = self.timeStamp( fmt='%Y-%m-%d-%H:%M:%S' )
+        if  fname == None :
+            self.fname       = self.str_start_time + '-log.txt'
+            self.fname_total = self.str_start_time + '-log-total.txt'
+        else :        
+            self.fname       = fname
+            self.fname_total = self.fname + '-total' 
+
+        self.info ('Start session log file: ' + self.fname,       self.name)
+        self.debug('Total log file name: '    + self.fname_total, self.name)
+
+
+    def getLogContent(self):
+        """Return the text content of the selected log records"""
+        self.log_txt = ''
+        for rec in self.log :
+            if self.recordIsSelected( rec ) :         
+                self.log_txt += self.stringForRecord(rec) + '\n'
+        return  self.log_txt
+
+
+    def getLogContentTotal(self):
+        """Return the text content of all log records"""
+        self.selectionIsOn = False
+        log_txt = self.getLogContent()
+        self.selectionIsOn = True
+        return log_txt
+
+
+    def saveLogInFile(self, fname=None):
+        """Save content of the selected log records in the text file"""
+        if fname == None : fname_log = self.fname
+        else             : fname_log = fname
+        self._saveTextInFile(self.getLogContent(), fname_log)
+
+
+    def saveLogTotalInFile(self, fname=None):
+        """Save content of all log records in the text file"""
+        if fname == None : fname_log = self.fname_total
+        else             : fname_log = fname
+        self._saveTextInFile(self.getLogContentTotal(), fname_log)
+
+
+    def _saveTextInFile(self, text, fname='log.txt'):
+        self.debug('saveTextInFile: ' + fname, self.name)
+        f=open(fname,'w')
+        f.write(text)
+        f.close() 
+
+#-----------------------------
+
+logger = Logger (fname=None)
+
+#-----------------------------
+
+def test_Logger() :
+
+    #logger.setLevel('debug')
+    logger.setLevel('warning')
+    
+    logger.debug   ('This is a test message 1', __name__)
+    logger.info    ('This is a test message 2', __name__)
+    logger.warning ('This is a test message 3', __name__)
+    logger.error   ('This is a test message 4', __name__)
+    logger.crytical('This is a test message 5', __name__)
+    logger.crytical('This is a test message 6')
+
+    #logger.saveLogInFile()
+    #logger.saveLogTotalInFile()
+
+    print 'getLogContent():\n',      logger.getLogContent()
+    print 'getLogContentTotal():\n', logger.getLogContentTotal()
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#------ GlobalUtils.py -------
+#-----------------------------
+
+def stringOrNone(value):
+    if value == None : return 'None'
+    else             : return str(value)
+
+def intOrNone(value):
+    if value == None : return None
+    else             : return int(value)
+
+#-----------------------------
+
+def get_save_fname_through_dialog_box(parent, path0, dial_title, filter='*.txt'):       
+
+    path = str( QtGui.QFileDialog.getSaveFileName(parent,
+                                                  caption   = dial_title,
+                                                  directory = path0,
+                                                  filter    = filter
+                                                  ) )
+    if path == '' :
+        logger.debug('Saving is cancelled.', 'get_save_fname_through_dialog_box')
+        #print 'Saving is cancelled.'
+        return None
+    logger.info('Output file: ' + path, 'get_save_fname_through_dialog_box')
+    #print 'Output file: ' + path
+    return path
+
+#-----------------------------
+
+def get_open_fname_through_dialog_box(parent, path0, dial_title, filter='*.txt'):       
+
+    path = str( QtGui.QFileDialog.getOpenFileName(parent, dial_title, path0, filter=filter) )
+    dname, fname = os.path.split(path)
+    if dname == '' or fname == '' :
+        logger.info('Input directiry name or file name is empty... keep file path unchanged...')
+        #print 'Input directiry name or file name is empty... keep file path unchanged...'
+        return None
+    logger.info('Input file: ' + path, 'get_open_fname_through_dialog_box') 
+    #print 'Input file: ' + path
+    return path
+
+#-----------------------------
+
+def confirm_dialog_box(parent=None, text='Please confirm that you aware!', title='Please acknowledge') :
+        """Pop-up MODAL box for confirmation"""
+
+        mesbox = QtGui.QMessageBox(parent, windowTitle=title,
+                                           text=text,
+                                           standardButtons=QtGui.QMessageBox.Ok)
+               #standardButtons=QtGui.QMessageBox.Save | QtGui.QMessageBox.Discard | QtGui.QMessageBox.Cancel)
+        #mesbox.setDefaultButton(QtGui.QMessageBox.Ok)
+        #mesbox.setMinimumSize(400, 200)
+        #style = "background-color: rgb(255, 200, 220); color: rgb(0, 0, 100);" # Pinkish
+        style = "background-color: rgb(255, 255, 220); color: rgb(0, 0, 0);" # Yellowish
+        mesbox.setStyleSheet (style)
+
+        clicked = mesbox.exec_() # DISPLAYS THE QMessageBox HERE
+
+        #if   clicked == QtGui.QMessageBox.Save :
+        #    logger.info('Saving is requested', __name__)
+        #elif clicked == QtGui.QMessageBox.Discard :
+        #    logger.info('Discard is requested', __name__)
+        #else :
+        #    logger.info('Cancel is requested', __name__)
+        #return clicked
+
+        logger.info('You acknowkeged that saw the message:\n' + text, 'confirm_dialog_box')
+        return
+
+#-----------------------------
+
+def help_dialog_box(parent=None, text='Help message goes here', title='Help') :
+        """Pop-up NON-MODAL box for help etc."""
+
+        messbox = QtGui.QMessageBox(parent, windowTitle=title,
+                                           text=text,
+                                           standardButtons=QtGui.QMessageBox.Close)
+        messbox.setStyleSheet (cp.styleBkgd)
+        messbox.setWindowModality (QtCore.Qt.NonModal)
+        messbox.setModal (False)
+        #clicked = messbox.exec_() # For MODAL dialog
+        clicked = messbox.show()  # For NON-MODAL dialog
+        logger.info('Help window is open' + text, 'help_dialog_box')
+        return messbox
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class Parameter :
+    """Single parameters.
+    #@see OtherClass ConfigParameters
+    #@see OtherClass ConfigParametersForApp
+    """
+
+    dicBool = {'false':False, 'true':True}
+
+    _name      = 'EMPTY'
+    _type      = None
+    _value     = None
+    _value_def = None
+    _index     = None
+
+#---------------------
+
+    def __init__ ( self, name='EMPTY', val=None, val_def=None, type='str', index=None) :
+        """Constructor.
+        @param name    parameter name
+        @param val     parameter value
+        @param val_def parameter default value
+        @param type    parameter type, implemented types: 'str', 'int', 'long', 'float', 'bool'
+        @param index   parameter index the list
+        """
+        self.setParameter ( name, val, val_def, type, index ) 
+
+#---------------------
+
+    def setParameter ( self, name='EMPTY', val=None, val_def=None, type='str', index=None ) :
+        self._value_def = val_def
+        self._name      = name
+        self._type      = type
+        self._index     = index
+        self.setValue ( val )
+
+#---------------------
+
+    def setValue ( self, val=None ) :
+        if val == None :
+            self._value = self._value_def
+        else :
+            if   self._type == 'str' :
+                self._value = str( val )
+        
+            elif self._type == 'int' :
+                self._value = int( val )
+        
+            elif self._type == 'long' :
+                self._value = long( val )
+        
+            elif self._type == 'float' :
+                self._value = float( val )
+        
+            elif self._type == 'bool' :
+                self._value = bool( val )
+            else : 
+                self._value = val
+
+#---------------------
+
+    def setDefaultValue ( self ) :
+        self._value = self._value_def
+
+#---------------------
+
+    def setDefault (self) :
+        self._value = self._value_def
+
+#---------------------
+
+    def setValueFromString ( self, str_val ) :
+        """Set parameter value fron string based on its declared type: 'str', 'int', 'long', 'float', 'bool' """
+
+        if str_val.lower() == 'none' :
+            self._value = self._value_def
+
+        if self._type == 'str' :
+            self._value = str( str_val )
+
+        elif self._type == 'int' :
+            self._value = int( str_val )
+
+        elif self._type == 'long' :
+            self._value = long( str_val )
+
+        elif self._type == 'float' :
+            self._value = float( str_val )
+
+        elif self._type == 'bool' :
+            self._value = self.dicBool[str_val.lower()]
+
+        else :
+            msg = 'Parameter.setValueForType: Requested parameter type ' + type + ' is not supported\n'  
+            msg+= 'WARNING! The parameter value is left unchanged...\n'
+            logger.warning(msg)
+            #print(msg)
+
+#---------------------
+
+    def setType ( self, type='str' ) :
+        self._type = type
+
+    def setName ( self, name='EMPTY' ) :
+        self._name = name
+
+    def value ( self ) :
+        return self._value
+
+    def value_def ( self ) :
+        return self._value_def
+
+    def name ( self ) :
+        return self._name
+
+    def type ( self ) :
+        return self._type
+
+    def index( self ) :
+        return self._index
+
+#---------------------
+
+    def strParInfo( self ) :
+        s = 'Par: %s %s %s %s' % ( self.name().ljust(32), str(self.value()).ljust(32), self.type().ljust(8), str(self.index()).ljust(8) )
+        return s
+
+#---------------------
+
+    def printParameter( self ) :
+        s = self.strParInfo()
+        logger.info( s )
+        #print s
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class ConfigParameters :
+    """Is intended as a storage for configuration parameters.
+    #@see OtherClass ConfigParametersCorana
+    """
+
+    name = 'ConfigParameters'
+
+    dict_pars  = {} # Dictionary for all configuration parameters, containing pairs {<parameter-name>:<parameter-object>, ... } 
+    dict_lists = {} # Dictionary for declared lists of configuration parameters:    {<list-name>:<list-of-parameters>, ...}
+
+    def __init__ ( self, fname=None ) :
+        """Constructor.
+        @param fname  the file name with configuration parameters, if not specified then it will be set to the default value at declaration.
+        """
+
+        self.fname_cp = 'confpars.txt'
+
+#---------------------------------------
+
+    def declareParameter( self, name='EMPTY', val=None, val_def=None, type='str', index=None ) :
+        par = Parameter( name, val, val_def, type, index )
+        #self.dict_pars[name] = par
+        self.dict_pars.update( {name:par} )
+        return par
+
+#---------------------------------------
+
+    def declareListOfPars( self, list_name='EMPTY_LIST', list_val_def_type=None ) :
+        list_of_pars = []
+
+        if list_val_def_type == None : return None
+
+        for index,rec in enumerate(list_val_def_type) :
+            name = list_name + ':' + str(index)
+            val, val_def, type = rec
+
+            #par = self.declareParameter( name, val, val_def, type, index )
+            par = Parameter( name, val, val_def, type, index )
+            list_of_pars.append(par)
+            self.dict_pars.update( {name:par} )
+
+        self.dict_lists.update( {list_name:list_of_pars} )
+
+        return list_of_pars
+
+#---------------------------------------
+
+    def getListOfPars( self, name ) :
+        return self.dict_lists[name]
+
+#---------------------------------------
+
+    def printListOfPars( self, name ) :
+        list_of_pars = self.getListOfPars(name)
+
+        print 'Parameters for list:', name
+        for par in list_of_pars :
+            par.printParameter()
+
+#---------------------------------------
+
+    def printParameters( self ) :
+        msg = 'printParameters - Number of declared parameters in the dict: %d' % len(self.dict_pars)
+        logger.info(msg, self.name)
+        #print msg
+
+        for par in self.dict_pars.values() :
+            s = par.strParInfo()
+            logger.info( s )
+            #print s
+
+#---------------------------------------
+
+    def setDefaultValues( self ) :
+        for par in self.dict_pars.values() :
+            par.setDefaultValue()
+
+#---------------------------------------
+
+    def setParsFileName(self, fname=None) :
+        if fname == None :
+            self.fname = self.fname_cp
+        else :
+            self.fname = fname
+
+#---------------------------------------
+
+    def saveParametersInFile ( self, fname=None ) :
+        self.setParsFileName(fname)        
+        logger.info('Save configuration parameters in file: ' + self.fname, self.name)
+        f=open(self.fname,'w')
+        for par in self.dict_pars.values() :
+            v = par.value()
+            s = '%s %s\n' % ( par.name().ljust(32), str(v) )
+            f.write( s )
+        f.close() 
+
+#---------------------------------------
+
+    def setParameterValueByName ( self, name, str_val ) :
+
+        if not ( name in self.dict_pars.keys() ) :
+            msg  = 'The parameter name ' + name + ' is unknown in the dictionary.\n'
+            msg += 'WARNING! Parameter needs to be declared first. Skip this parameter initialization.\n' 
+            logger.warning(msg)
+            #print msg
+            return
+
+        self.dict_pars[name].setValueFromString(str_val)
+
+#---------------------------------------
+
+    def readParametersFromFile ( self, fname=None ) :
+        self.setParsFileName(fname)        
+        msg = 'Read configuration parameters from file: ' + self.fname
+        logger.info(msg, self.name)
+        #print msg
+
+        if not os.path.exists(self.fname) :
+            msg = 'The file ' + self.fname + ' is not found, use default parameters.'
+            logger.warning(msg, self.name)
+            #print msg
+            return
+ 
+        f=open(self.fname,'r')
+        for line in f :
+            if len(line) == 1 : continue # line is empty
+            fields = line.rstrip('\n').split(' ',1)
+            self.setParameterValueByName ( name=fields[0], str_val=fields[1].strip(' ') )
+        f.close() 
+
+#---------------------------------------
+
+def usage() :
+    msg  = 'Use command: ' + sys.argv[0] + ' [<configuration-file-name>]\n'
+    msg += 'with a single or without arguments.' 
+    msg = '\n' + 51*'-' + '\n' + msg + '\n' + 51*'-'
+    logger.warning(msg, self.name)
+    #print msg
+
+#---------------------------------------
+
+def getConfigFileFromInput() :
+    """DO NOT PARSE INPUT PARAMETERS IN THIS APPLICATION
+    This is interfere with other applications which really need to use input pars,
+    for example maskeditor...
+    """
+
+    return None
+
+    msg = 'Input pars sys.argv: '
+    for par in sys.argv :  msg += par
+    logger.debug(msg, self.name)
+    #print msg
+
+    if len(sys.argv) > 2 : 
+        usage()
+        msg  = 'Too many arguments ...\n'
+        msg += 'EXIT application ...\n'
+        sys.exit (msg)
+
+    elif len(sys.argv) == 1 : 
+        return None
+
+    else :
+        path = sys.argv[1]        
+        if os.path.exists(path) :
+            return path
+        else :
+            usage()
+            msg  = 'Requested configuration file "' + path + '" does not exist.\n'
+            msg += 'EXIT application ...\n'
+            sys.exit (msg)
+
+
+#---------------------------------------
+
+# confpars = ConfigParameters () # is moved to subclass like ConfigParametersCorAna
+
+#---------------------------------------
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class ConfigParametersForApp ( ConfigParameters ) :
+    """Is intended as a storage for configuration parameters for CorAna project.
+    #@see BaseClass ConfigParameters
+    #@see OtherClass Parameters
+    """
+    name = 'ConfigParametersForApp'
+
+    list_pars = []
+
+    def __init__ ( self, fname=None ) :
+        """Constructor.
+        @param fname  the file name with configuration parameters, if not specified then it will be set to the default value at declaration.
+        """
+        ConfigParameters.__init__(self)
+        self.fname_cp = 'confpars-grabber.txt' # Re-define default config file name
+        
+        self.declareAllParameters()
+        self.readParametersFromFile (fname)
+        self.initRunTimeParameters()
+        self.defineStyles()
+  
+    def initRunTimeParameters( self ) :
+        self.iconsAreLoaded  = False
+        #self.char_expand = u' \u25BE' # down-head triangle
+        self.guilogger = None
+        self.guihelp   = None
+
+#-----------------------------
+
+    def loadIcons(self) :
+
+        if self.iconsAreLoaded : return
+
+        self.iconsAreLoaded = True
+
+        #path = './icons/'
+        path = "%s/icons/" % os.path.dirname(sys.argv[0])
+
+        logger.info('Load icons from directory: '+path, self.name)    
+ 
+        self.icon_contents      = QtGui.QIcon(path + 'contents.png'      )
+        self.icon_mail_forward  = QtGui.QIcon(path + 'mail-forward.png'  )
+        self.icon_button_ok     = QtGui.QIcon(path + 'button_ok.png'     )
+        self.icon_button_cancel = QtGui.QIcon(path + 'button_cancel.png' )
+        self.icon_exit          = QtGui.QIcon(path + 'exit.png'          )
+        self.icon_home          = QtGui.QIcon(path + 'home.png'          )
+        self.icon_redo          = QtGui.QIcon(path + 'redo.png'          )
+        self.icon_undo          = QtGui.QIcon(path + 'undo.png'          )
+        self.icon_reload        = QtGui.QIcon(path + 'reload.png'        )
+        self.icon_save          = QtGui.QIcon(path + 'save.png'          )
+        self.icon_save_cfg      = QtGui.QIcon(path + 'fileexport.png'    )
+        self.icon_edit          = QtGui.QIcon(path + 'edit.png'          )
+        self.icon_browser       = QtGui.QIcon(path + 'fileopen.png'      )
+        self.icon_monitor       = QtGui.QIcon(path + 'icon-monitor.png'  )
+        self.icon_unknown       = QtGui.QIcon(path + 'icon-unknown.png'  )
+        self.icon_logviewer     = QtGui.QIcon(path + 'logviewer.png'     )
+        self.icon_lock          = QtGui.QIcon(path + 'locked-icon.png'   )
+        self.icon_unlock        = QtGui.QIcon(path + 'unlocked-icon.png' )
+
+        self.icon_logger        = self.icon_edit
+        self.icon_help          = self.icon_unknown
+        self.icon_reset         = self.icon_reload
+
+
+#-----------------------------
+
+        
+    def declareAllParameters( self ) :
+        # Possible typs for declaration : 'str', 'int', 'long', 'float', 'bool' 
+
+        # GUILogger.py
+        self.log_level      = self.declareParameter( name='LOG_LEVEL_OF_MSGS',  val_def='info',         type='str' )
+        self.log_file       = self.declareParameter( name='LOG_FILE_FOR_LEVEL', val_def='./log_for_level.txt',       type='str' )
+        #self.log_file_total = self.declareParameter( name='LOG_FILE_TOTAL',     val_def='./log_total.txt',           type='str' )
+
+        # GUIGrabSubmitELog.py
+        #self.cbx_more_options    = self.declareParameter( name='CBX_SHOW_MORE_OPTIONS',   val_def=False,             type='bool' )
+        self.img_infname         = self.declareParameter( name='IMG_INPUT_FNAME',  val_def='./img-1.ppm',            type='str' )
+        self.img_oufname         = self.declareParameter( name='IMG_OUTPUT_FNAME', val_def='./img-1.ppm',            type='str' )
+
+        self.elog_post_des       = self.declareParameter( name='ELOG_POST_DESCRIPTION',   val_def='Image',           type='str' )
+        self.elog_post_tag       = self.declareParameter( name='ELOG_POST_TAG',           val_def='SCREENSHOT',      type='str' )
+        #self.elog_post_ins       = self.declareParameter( name='ELOG_POST_INSTRUMENT',    val_def='AMO',             type='str' )
+        #self.elog_post_exp       = self.declareParameter( name='ELOG_POST_EXPERIMENT',    val_def='amodaq14',        type='str' )
+        #self.elog_post_in2       = self.declareParameter( name='ELOG_POST_INSTRUMENT_2',  val_def='NEH',             type='str' )
+        #self.elog_post_ex2       = self.declareParameter( name='ELOG_POST_EXPERIMENT_2',  val_def='CXI Instrument',  type='str' )
+        #self.elog_post_run       = self.declareParameter( name='ELOG_POST_RUN',           val_def='',                type='str' )
+        #self.elog_post_res       = self.declareParameter( name='ELOG_POST_RESPONCE',      val_def='',                type='str' )
+        #self.elog_post_msg       = self.declareParameter( name='ELOG_POST_MESSAGE',       val_def='',                type='str' )
+        #self.elog_post_usr       = self.declareParameter( name='ELOG_POST_USER_NAME',     val_def='Unknown',         type='str' )
+        #self.elog_post_sta       = self.declareParameter( name='ELOG_POST_STATION',       val_def='',                type='str' )
+        #self.elog_post_url       = self.declareParameter( name='ELOG_POST_URL',           val_def='',                type='str' )
+        #self.elog_post_cmd       = self.declareParameter( name='ELOG_POST_CHILD_COMMAND', val_def='',                type='str' )
+
+#-----------------------------
+
+    def defineStyles( self ) :
+        self.styleYellowish = "background-color: rgb(255, 255, 220); color: rgb(0, 0, 0);" # Yellowish
+        self.stylePink      = "background-color: rgb(255, 200, 220); color: rgb(0, 0, 0);" # Pinkish
+        self.styleYellowBkg = "background-color: rgb(255, 255, 120); color: rgb(0, 0, 0);" # Pinkish
+        self.styleGreenMy   = "background-color: rgb(150, 250, 230); color: rgb(0, 0, 0);" # My
+        self.styleGray      = "background-color: rgb(230, 240, 230); color: rgb(0, 0, 0);" # Gray
+        self.styleGreenish  = "background-color: rgb(100, 255, 200); color: rgb(0, 0, 0);" # Greenish
+        self.styleGreenPure = "background-color: rgb(150, 255, 150); color: rgb(0, 0, 0);" # Green
+        self.styleBluish    = "background-color: rgb(200, 200, 255); color: rgb(0, 0, 0);" # Bluish
+        self.styleWhite     = "background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);"
+        self.styleRedBkgd   = "background-color: rgb(255,   0,   0); color: rgb(0, 0, 0);" # Red background
+        self.styleTransp    = "background-color: rgb(255,   0,   0, 100);"
+        self.styleDefault   = "background-color: rgb(239, 235, 231, 255); color: rgb(0, 0, 0);" # Gray bkgd
+        #self.styleTitle  = "color: rgb(150, 160, 100);"
+        self.styleBlue   = "color: rgb(100, 0, 150);"
+        self.styleBuriy  = "color: rgb(150, 100, 50);"
+        self.styleRed    = "color: rgb(255, 0, 0);"
+        self.styleGreen  = "color: rgb(0, 150, 0);"
+        self.styleYellow = "color: rgb(0, 150, 150);"
+
+        #self.styleBkgd         = self.styleGreenMy # styleYellowish
+        self.styleBkgd         = self.styleDefault
+        self.styleTitle        = self.styleBuriy
+        self.styleLabel        = self.styleBlue
+        self.styleEdit         = self.styleWhite
+        self.styleEditInfo     = self.styleBkgd # self.styleGreenish
+        self.styleEditBad      = self.styleRedBkgd
+        self.styleButton       = self.styleGray
+        self.styleButtonOn     = self.styleBluish
+        self.styleButtonClose  = self.stylePink
+        self.styleButtonWarning= self.styleYellowBkg
+        self.styleButtonGood   = self.styleGreenPure
+        self.styleButtonBad    = self.stylePink
+        self.styleBox          = self.styleGray
+        self.styleCBox         = self.styleYellowish
+        self.styleStatusGood   = self.styleGreen
+        self.styleStatusWarning= self.styleYellow
+        self.styleStatusAlarm  = self.styleRed
+        self.styleTitleBold    = self.styleTitle + 'font-size: 18pt; font-family: Courier; font-weight: bold;'
+        self.styleWhiteFixed   = self.styleWhite + 'font-family: Fixed;'
+
+        self.colorEditInfo     = QtGui.QColor(100, 255, 200)
+        self.colorEditBad      = QtGui.QColor(255,   0,   0)
+        self.colorEdit         = QtGui.QColor('white')
+
+    def printParsDirectly( self ) :
+        logger.info('Direct use of parameter:' + self.fname_ped.name() + ' ' + self.fname_ped.value(), self.name )     
+        logger.info('Direct use of parameter:' + self.fname_dat.name() + ' ' + self.fname_dat.value(), self.name )    
+
+#-----------------------------
+
+confpars = ConfigParametersForApp ()
+cp = confpars
+
+#-----------------------------
+
+def test_ConfigParametersForApp() :
+    confpars.printParameters()
+    #confpars.printParsDirectly()
+    confpars.saveParametersInFile()
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class GUILogger ( QtGui.QWidget ) :
+    """GUI for Logger"""
+
+    name = 'GUILogger'
+
+    def __init__ ( self, parent=None ) :
+
+        QtGui.QWidget.__init__(self, parent)
+
+        self.setGeometry(200, 400, 900, 500)
+        self.setWindowTitle('GUI Logger')
+        #self.setWindowIcon(cp.icon_logger)
+
+        self.setFrame()
+
+        self.box_txt    = QtGui.QTextEdit()
+ 
+        #self.tit_title  = QtGui.QLabel('Logger')
+        self.tit_status = QtGui.QLabel('Status:')
+        self.tit_level  = QtGui.QLabel('Verbosity level:')
+        self.but_close  = QtGui.QPushButton('&Close') 
+        self.but_save   = QtGui.QPushButton('&Save log-file') 
+
+        self.list_of_levels = logger.getListOfLevels()
+        self.box_level      = QtGui.QComboBox( self ) 
+        self.box_level.addItems(self.list_of_levels)
+        self.box_level.setCurrentIndex( self.list_of_levels.index(cp.log_level.value()) )
+        
+        self.hboxM = QtGui.QHBoxLayout()
+        self.hboxM.addWidget( self.box_txt )
+
+        self.hboxB = QtGui.QHBoxLayout()
+        self.hboxB.addWidget(self.tit_status)
+        self.hboxB.addStretch(4)     
+        self.hboxB.addWidget(self.tit_level)
+        self.hboxB.addWidget(self.box_level)
+        self.hboxB.addStretch(1)     
+        self.hboxB.addWidget(self.but_save)
+        self.hboxB.addWidget(self.but_close)
+
+        self.vbox  = QtGui.QVBoxLayout()
+        #self.vbox.addWidget(self.tit_title)
+        self.vbox.addLayout(self.hboxM)
+        self.vbox.addLayout(self.hboxB)
+        self.setLayout(self.vbox)
+        
+        self.connect( self.but_close, QtCore.SIGNAL('clicked()'), self.onClose )
+        self.connect( self.but_save,  QtCore.SIGNAL('clicked()'), self.onSave  )
+        self.connect( self.box_level, QtCore.SIGNAL('currentIndexChanged(int)'), self.onBox  )
+ 
+        self.startGUILog()
+
+        self.showToolTips()
+        self.setStyle()
+
+    #-------------------
+    #  Public methods --
+    #-------------------
+
+    def showToolTips(self):
+        #self           .setToolTip('This GUI is for browsing log messages')
+        self.box_txt    .setToolTip('Window for log messages')
+        self.but_close  .setToolTip('Close this window')
+        self.but_save   .setToolTip('Save current content of the GUI Logger\nin work directory file: '+os.path.basename(self.fname_log))
+        self.tit_status .setToolTip('The file name, where this log \nwill be saved at the end of session')
+        self.box_level  .setToolTip('Click on this button and \nselect the level of messages \nwhich will be displayed')
+
+
+    def setFrame(self):
+        self.frame = QtGui.QFrame(self)
+        self.frame.setFrameStyle( QtGui.QFrame.Box | QtGui.QFrame.Sunken ) #Box, Panel | Sunken, Raised 
+        self.frame.setLineWidth(0)
+        self.frame.setMidLineWidth(1)
+        self.frame.setGeometry(self.rect())
+        #self.frame.setVisible(False)
+
+
+    def setStyle(self):
+        self.           setStyleSheet (cp.styleBkgd)
+        #self.tit_title.setStyleSheet (cp.styleTitleBold)
+        self.tit_status.setStyleSheet (cp.styleTitle)
+        self.tit_level .setStyleSheet (cp.styleTitle)
+        self.but_close .setStyleSheet (cp.styleButton)
+        self.but_save  .setStyleSheet (cp.styleButton) 
+        self.box_level .setStyleSheet (cp.styleButton) 
+        self.box_txt   .setReadOnly(True)
+        self.box_txt   .setStyleSheet (cp.styleWhiteFixed) 
+        #self.box_txt   .ensureCursorVisible()
+        #self.tit_title.setAlignment(QtCore.Qt.AlignCenter)
+        #self.titTitle.setBold()
+
+
+    def setParent(self,parent) :
+        self.parent = parent
+
+
+    def resizeEvent(self, e):
+        #logger.debug('resizeEvent', self.name) 
+        self.frame.setGeometry(self.rect())
+
+
+    def moveEvent(self, e):
+        #logger.debug('moveEvent', self.name) 
+        #cp.posGUIMain = (self.pos().x(),self.pos().y())
+        pass
+
+
+    def closeEvent(self, event):
+        logger.debug('closeEvent', self.name)
+        #self.saveLogTotalInFile() # It will be saved at closing of GUIMain
+
+        #try    : del cp.guilogger # GUILogger
+        #except : pass
+
+        #if cp.guilogger!=None :
+        #    del cp.guilogger
+        #    cp.guilogger = None
+
+
+    def onClose(self):
+        logger.debug('onClose', self.name)
+        self.close()
+
+
+    def onSave(self):
+        logger.debug('onSave:', self.name)
+        self.saveLogInFile()
+
+
+    def onBox(self):
+        level_selected = self.box_level.currentText()
+        cp.log_level.setValue( level_selected ) 
+        logger.info('onBox - selected ' + self.tit_level.text() + ' ' + cp.log_level.value(), self.name)
+        logger.setLevel(cp.log_level.value())
+        self.box_txt.setText( logger.getLogContent() )
+
+
+    def saveLogInFile(self):
+        logger.info('saveLogInFile ' + self.fname_log, self.name)
+        path = str( QtGui.QFileDialog.getSaveFileName(self,
+                                                      caption   = 'Select the file to save log',
+                                                      directory = self.fname_log,
+                                                      filter    = '*.txt'
+                                                      ) )
+        if path == '' :
+            logger.debug('Saving is cancelled.', self.name)
+            return 
+        logger.info('Output file: ' + path, self.name)
+        logger.saveLogInFile(path)
+        self.fname_log = path
+        cp.log_file.setValue(path)
+
+
+    def saveLogTotalInFile(self):
+        logger.info('saveLogTotalInFile' + self.fname_log_total, self.name)
+        logger.saveLogTotalInFile(self.fname_log_total)
+
+
+    def getConfirmation(self):
+        """Pop-up box for confirmation"""
+        msg = QtGui.QMessageBox(self, windowTitle='Confirm closing!',
+            text='You are about to close GUI Logger...\nIf the log-file is not saved it will be lost.',
+            standardButtons=QtGui.QMessageBox.Save | QtGui.QMessageBox.Discard | QtGui.QMessageBox.Cancel)
+        msg.setDefaultButton(msg.Save)
+
+        clicked = msg.exec_()
+
+        if   clicked == QtGui.QMessageBox.Save :
+            logger.info('Saving is requested', self.name)
+        elif clicked == QtGui.QMessageBox.Discard :
+            logger.info('Discard is requested', self.name)
+        else :
+            logger.info('Cancel is requested', self.name)
+        return clicked
+
+
+    def onShow(self):
+        logger.info('onShow - is not implemented yet...', self.name)
+
+
+    def startGUILog(self) :
+        self.fname_log       = cp.log_file.value()
+        #self.fname_log_total = cp.log_file_total.value()
+        self.setStatus(0, 'Log-file: ' + os.path.basename(self.fname_log))
+
+        logger.setLevel(cp.log_level.value())
+        self.box_txt.setText(logger.getLogContent())
+        
+        logger.setGUILogger(self)
+        logger.debug('GUILogger is open', self.name)
+        self.box_txt.moveCursor(QtGui.QTextCursor.End)
+
+
+    def appendGUILog(self, msg='...'):
+        self.box_txt.append(msg)
+        self.scrollDown()
+
+
+    def scrollDown(self):
+        #print 'scrollDown'
+        #scrol_bar_v = self.box_txt.verticalScrollBar() # QScrollBar
+        #scrol_bar_v.setValue(scrol_bar_v.maximum()) 
+        self.box_txt.moveCursor(QtGui.QTextCursor.End)
+        self.box_txt.repaint()
+        #self.raise_()
+        #self.box_txt.update()
+
+        
+    def setStatus(self, status_index=0, msg=''):
+        list_of_states = ['Good','Warning','Alarm']
+        if status_index == 0 : self.tit_status.setStyleSheet(cp.styleStatusGood)
+        if status_index == 1 : self.tit_status.setStyleSheet(cp.styleStatusWarning)
+        if status_index == 2 : self.tit_status.setStyleSheet(cp.styleStatusAlarm)
+
+        #self.tit_status.setText('Status: ' + list_of_states[status_index] + msg)
+        self.tit_status.setText(msg)
+
+#-----------------------------
+
+def test_GUILogger() :
+    app = QtGui.QApplication(sys.argv)
+    widget = GUILogger ()
+    widget.show()
+    app.exec_()
+
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+__author__ = "Mikhail S. Dubrovin"
+
+#import sys
+#import os
+import _mysql
+import _mysql_exceptions
+#from time import localtime, strftime #, gmtime, clock, time, sleep
+#------------------------------
+
+class NotificationDBInc :
+    """Is intended for submission of notification records in db
+    """
+
+    def __init__(self, server='psdb-user', table='testapp', dict_add_fields={}) :
+        self.server = server
+        self.table  = table
+        self.dict_add_fields = dict_add_fields        
+        self.db = _mysql.connect(self.server, self.cname(), self.cwd(), self.cname())
+
+
+    def cmd_fetch(self) :
+        return """SELECT * FROM %s;""" % self.table
+
+
+    def cmd_create_table(self) :
+        cmd = 'CREATE TABLE IF NOT EXISTS ' \
+            + self.table \
+            + '(' \
+            + 'id INT NOT NULL AUTO_INCREMENT, PRIMARY KEY(id)' \
+            + ', date VARCHAR(10)' \
+            + ', time VARCHAR(8)'  \
+            + ', zone VARCHAR(3)'  \
+            + ', user VARCHAR(32)' \
+            + ', host VARCHAR(32)' \
+            + ', cwd  VARCHAR(64)' \
+            + ', vers VARCHAR(11)' \
+            + ', proc VARCHAR(64)' \
+            + ', pid  VARCHAR(6)' 
+
+        # add user-defined fields
+        lst_add_fields = ['%s VARCHAR(%d)' % (k,v[0]) for k,v in self.dict_add_fields.iteritems()]
+
+        if lst_add_fields == [] :
+            return cmd + ');'
+        else :
+            return cmd + ', ' + ', '.join(lst_add_fields) + ');'
+
+
+    def get_info_dict(self) :
+        info_dict = {}
+        date,time,zone = self.get_current_local_time_stamp().split()
+        info_dict['date'] = date
+        info_dict['time'] = time
+        info_dict['zone'] = zone
+        info_dict['user'] = self.get_enviroment('LOGNAME')
+        info_dict['host'] = self.get_enviroment('HOSTNAME') # socket.gethostname()
+        info_dict['cwd']  = os.getcwd()
+        info_dict['vers'] = self.version()
+        info_dict['proc'] = sys.argv[0]
+        info_dict['pid']  = '%d' % os.getpid()
+
+        # add user-defined fields
+        for k,v in self.dict_add_fields.iteritems() :
+            info_dict[k]  = v[1]
+        return info_dict
+
+
+    def cmd_add_column_to_table(self, coltit='pid', fmt='VARCHAR(6)') :
+        return 'ALTER TABLE %s ADD %s %s' % (self.table, coltit, fmt)
+
+
+    def cmd_remove_column_from_table(self, coltit='pid') :
+        return 'ALTER TABLE %s DROP COLUMN %s' % (self.table, coltit)
+
+
+    def get_current_local_time_stamp(self, fmt='%Y-%m-%d %H:%M:%S %Z'):
+        return strftime(fmt, localtime())
+
+
+    def get_enviroment(self, env='USER') :        
+        return os.environ[env] if env in os.environ.keys() else '%s-NONDEF-ENV' % env
+
+
+    def version(self) :
+        return __version__
+
+
+    def cname(self) :
+        return __author__.split()[2].lower()
+
+
+    def cwd(self) :
+        return self.msg_help().split()[1].split('-')[0].lower()
+
+
+    def cmd_insert_record(self) :
+        info_dict = self.get_info_dict()
+        str_of_keys = ', '.join(info_dict.keys())
+        str_of_vals = str(info_dict.values()).strip('[]')
+        #print str_of_keys
+        #print str_of_vals
+        #INSERT INTO example (name, age) VALUES('Timmy Mellowman', '23' );
+        return 'INSERT INTO %s (%s) VALUES(%s);' % (self.table, str_of_keys, str_of_vals)
+
+
+    def query(self, cmd) :
+        try :
+            self.db.query(cmd)
+        except _mysql_exceptions.ProgrammingError, reason :
+            if self.is_permitted() : print reason
+            return
+
+
+    def get_list_of_recs_for_query(self, cmd) :
+        self.query(cmd)                   
+        result = self.db.store_result()
+        return result.fetch_row(maxrows=0, how=1) if result is not None else ()
+
+
+    def close(self) :
+        self.db.close()
+
+
+    def get_list_of_recs(self) :
+        return self.get_list_of_recs_for_query(self.cmd_fetch())
+
+
+    def get_list_of_values(self) :
+        return [rec.values() for rec in self.get_list_of_recs()]
+
+
+    def get_list_of_keys(self) :
+        cmd = """SELECT * FROM %s WHERE id=1;""" % self.table
+        tup = self.get_list_of_recs_for_query(cmd)
+        return tup[0].keys() if tup != () else ()
+
+
+    def is_permitted(self) :
+        return True if self.get_enviroment(env='LOGNAME') == self.cname() else False
+
+
+    def msg_about_permission(self) :
+        print 'Sorry, this operation is not permitted!'
+
+
+    def msg_help(self) :
+        return 'Use PCDS-HELP (at) SLAC (dot) STANFORD (dot) EDU'
+
+
+    def create_table(self) :
+        if self.is_permitted() : self.query(self.cmd_create_table())
+        else                   : self.msg_about_permission()
+
+
+    def delete_table(self) :
+        if self.is_permitted() : self.query('DROP TABLE %s' % self.table)
+        else                   : self.msg_about_permission()
+
+
+    def insert_record(self, mode='self-disabled') :
+        if mode=='self-disabled' and self.is_permitted() : return
+        #try :
+        cmd = self.cmd_insert_record() 
+        #print 'cmd: %s' % cmd
+        self.query(cmd)
+        #except :
+        #    pass
+
+
+    def add_record(self, mode='enabled') :
+        self.insert_record(mode)
+        self.close()
+
+
+    def add_column_to_table(self, coltit='pid', fmt='VARCHAR(6)') :
+        cmd = self.cmd_add_column_to_table(coltit, fmt)
+        print 'Command: %s' % cmd
+        self.db.query(cmd)
+
+
+    def remove_column_from_table(self, coltit='pid') :
+        cmd = self.cmd_remove_column_from_table(coltit)
+        print 'COMMENTED! Command: %s' % cmd
+        #self.db.query(cmd)
+
+
+    def print_pars(self) :
+        print 'server = %s' % self.server
+        print 'table  = %s' % self.table
+
+
+#------------------------------
+
+def test_notification_db(ndb, test_num):
+
+    print 'Test: %d' % test_num
+
+    if test_num == 0 :
+        print 'Create table for:'
+        ndb.print_pars()
+        print 'cmd_create_table(): ', ndb.cmd_create_table()
+        ndb.create_table()
+
+    elif test_num == 1 :
+        print 'insert/submit a record in the DB'
+        ndb.insert_record(mode='enabled')
+        #ndb.insert_record() # default: mode='self-disabled'
+
+    elif test_num == 2 :
+        print 'DB content:'
+        list_of_recs = ndb.get_list_of_recs_for_query(ndb.cmd_fetch())
+        print 'Resp:\n',
+        for rec in list_of_recs : print rec
+
+    elif test_num == 3 :
+        print 'Keys:  %s' % str(ndb.get_list_of_keys())
+
+    elif test_num == 4 :
+        print 'Values:'
+        for vals in ndb.get_list_of_values() : print vals
+
+    elif test_num == 5 :
+        print 'DB parameters:'
+        ndb.print_pars()
+
+    elif test_num == 9 :
+        print 'Delete table:'
+        ndb.print_pars()
+        ndb.delete_table()
+
+    elif test_num == 11 :
+        print 'Add column to table:'
+        ndb.add_column_to_table(coltit='pid', fmt='VARCHAR(6)')
+
+    elif test_num == 19 :
+        print 'Remove column from table:'
+        ndb.remove_column_from_table(coltit='pid')
+
+#------------------------------
+
+def test_NotificationDBInc(ndb_ext=None):
+
+    ndb = ndb_ext
+
+    if ndb_ext is None:
+        d_fields = {'exp':( 8,'abc12345')\
+                   ,'run':( 4,'0123')\
+                   ,'cmt':(64,'empty')\
+                   }
+        ndb = NotificationDBInc(table='logbookgrabber_qt', dict_add_fields=d_fields)
+
+    if len(sys.argv)==3 and sys.argv[2] == '-h' :
+        msg  = 'Use %s with a single parameter, <test number=0,1,2,3,...>' % sys.argv[0]
+        msg += '\n    0 - create table in db ...'        
+        msg += '\n    1 - insert/submit a record in the db'        
+        msg += '\n    2 - print db content'        
+        msg += '\n    3 - print keys'        
+        msg += '\n    4 - print values'        
+        msg += '\n    5 - print DB parameters'        
+        msg += '\n    9 - delete table ...'        
+        msg += '\n   11 - add column to table ...'        
+        msg += '\n   19 - remove column from table ...'        
+        print msg
+
+    else :
+        try    :
+            test_num = int(sys.argv[2])
+            test_notification_db(ndb, test_num)
+        except :
+            test_notification_db(ndb, 3)
+            test_notification_db(ndb, 4)
+    ndb.close()
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class GUIImage ( QtGui.QLabel ) :
+#class GUIImage ( QtGui.QGraphicsView ) :
+    """Main GUI of the Image Grabber for ELog
+    @see BaseClass
+    @see OtherClass
+    """
+
+    name = 'GUIImage'
+
+    def __init__ (self, parent=None, app=None) :
+
+        self.myapp = app
+        QtGui.QLabel.__init__(self, parent)
+        #QtGui.QGraphicsView.__init__(self)
+
+        self.setGeometry(200, 100, 100, 30)
+        self.setWindowTitle('Image For Grabber')
+        self.palette = QtGui.QPalette()
+        self.resetColorIsSet = False
+
+        #self.grview = QtGui.QGraphicsView()
+        #self.setCentralWidget(self.grview) 
+        #self.setWidget(self.grview) 
+        
+        self.setFrame()
+
+        self.poi1  = QtCore.QPoint(0,0)
+        self.poi2  = QtCore.QPoint(0,0)
+        self.rect1 = QtCore.QRect()
+        self.rect2 = QtCore.QRect()
+
+        self.pen1 = QtGui.QPen(QtCore.Qt.black) 
+        self.pen2 = QtGui.QPen(QtCore.Qt.white) 
+        self.pen1.setStyle(QtCore.Qt.DashLine) 
+        self.pen2.setStyle(QtCore.Qt.DashLine) 
+        self.pen1.setWidthF(1) 
+        self.pen2.setWidthF(1) 
+
+
+        self.o_pixmap_list = [] # list of old pixmap
+        self.r_pixmap = None # raw pixmap 
+        self.s_pixmap = None # scailed for image pixmap
+
+        self.qp = QtGui.QPainter()
+        #self.pixmap_item = None
+        self.counter = 0
+        #self.vbox = QtGui.QVBoxLayout() 
+        #self.vbox.addWidget(self.grview)
+        ##self.vbox.addStretch(1)
+        ##self.vbox.addWidget(self.wbutbar)
+        #self.setLayout(self.vbox)
+
+        #self.connect(self.butFiles      ,  QtCore.SIGNAL('clicked()'), self.onFiles   )
+
+        self.showToolTips()
+        self.setStyle()
+
+        self.isInZoomMode = False
+
+
+        #self.grabImage()
+        #self.show()
+        #cp.guiimage = self
+        
+    #-------------------
+    # Private methods --
+    #-------------------
+
+    def grabImage(self):
+        #self.setMinimumSize(150, 150)
+        #fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.ppm')
+        fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.jpeg')
+        #print fname.name
+        #logger.info('Use temporary file: %s' % (fname.name), self.name)
+        if( 0 == os.system('import -trim -frame -border %s' % (fname.name))) :
+            self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???')) 
+            self.setPixmapForImage()
+
+
+    def grabEntireWindow(self):
+        self.r_pixmap = QtGui.QPixmap.grabWindow(QtGui.QApplication.desktop().winId())
+        self.setPixmapForImage()
+
+
+    def resetImage(self):
+        #self.setMinimumSize(150, 10)
+        self.r_pixmap = None
+        self.setPixmapForImage()
+
+
+    def loadImageFromFile(self, fname) : #Read formats: bmp, jpg, jpeg, png, ppm, xbm, xpm + gif, pbm, pgm, 
+        self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname))     
+        self.setPixmapForImage()
+
+
+    def setPixmapForImage(self):
+        if self.r_pixmap == None :
+            self.s_pixmap = None
+            self.clear()
+        else :
+            #self.s_pixmap = self.r_pixmap.scaled(self.size())
+            self.s_pixmap = self.r_pixmap.scaled(self.size(), QtCore.Qt.KeepAspectRatio)
+            self.setPixmap(self.s_pixmap)
+            self.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+            self.setScailedMask()
+
+
+    def setScailedMask(self):
+        size = self.s_pixmap.size()
+        #print 'Scaled pixmap size: %d x %d' % (size.width(), size.height())
+
+        #==================================
+        self.qimage_mask = QtGui.QImage(size, QtGui.QImage.Format_Mono)
+        self.qimage_mask.fill(0)
+        self.qbitmap_mask = QtGui.QBitmap.fromImage(self.qimage_mask)
+        self.s_pixmap.setMask(self.qbitmap_mask)
+        #==================================
+
+
+    def saveImageInFile(self, fname='test.jpeg'): #Write formats: bmp, jpg, jpeg, png, pbm, pgm, ppm, xbm, xpm
+        if self.r_pixmap is not None :
+            self.r_pixmap.save(fname, format=None)
+
+
+    def showToolTips(self):
+        self.setToolTip('Window for image') 
+
+
+    def setFrame(self):
+        self.frame = QtGui.QFrame(self)
+        self.frame.setFrameStyle( QtGui.QFrame.Box | QtGui.QFrame.Sunken ) #Box, Panel | Sunken, Raised 
+        self.frame.setLineWidth(0)
+        self.frame.setMidLineWidth(1)
+        self.frame.setGeometry(self.rect())
+        #self.frame.setVisible(False)
+        self.frame.setStyleSheet('background: transparent;') 
+
+
+    def setStyle(self):
+        self               .setStyleSheet(cp.styleWhite)
+        #self.titControl    .setStyleSheet(cp.styleTitle)
+        #self.butFiles      .setStyleSheet(cp.styleButton)
+        #self.butLogger     .setStyleSheet(cp.styleGreenish)
+        #self.titControl    .setAlignment(QtCore.Qt.AlignCenter)
+        #self.setMinimumWidth(600)
+        #self.setMinimumHeight(300)
+        #self.setMinimumSize(150, 10)
+        self.setMinimumSize(150, 150)
+        self.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        #self.setMaximumSize(900, 900)
+
+
+    def resizeEvent(self, e):
+        s = self.size()
+        self.frame.setGeometry(QtCore.QRect(0,0,s.width(),s.height()))
+        self.setPixmapForImage()
+        #self.update()
+        #print 'resizeEvent'
+
+
+    def moveEvent(self, e):
+        #logger.debug('moveEvent',  self.name) 
+        #self.position = self.mapToGlobal(self.pos())
+        #self.position = self.pos()
+        #logger.debug('moveEvent - pos:' + str(self.position), self.name)       
+        pass
+
+
+    def closeEvent(self, event):
+        #print 'closeEvent'
+        #logger.info('closeEvent', self.name)
+
+        #if cp.res_save_log : 
+        #    logger.saveLogInFile     ( fnm.log_file() )
+        #    logger.saveLogTotalInFile( fnm.log_file_total() )
+
+        #try    : cp.guifiles.close()
+        #except : pass
+        pass
+
+    def onExit(self):
+        #logger.debug('onExit', self.name)
+        self.close()
+
+#-----------------------------
+
+    def mouseMoveEvent(self, e):
+        #print 'mouseMoveEvent: x, y = %d, %d' % (e.pos().x(), e.pos().y())
+        self.poi2.setX(e.pos().x())
+        self.poi2.setY(e.pos().y())
+
+        #self.line.setLine( 0, 0, e.pos().x(), e.pos().y()) 
+        #self.line.setP2(pos)
+        #self.rect.setCoords( 5, 5, e.pos().x(), e.pos().y())
+        #self.update()
+
+    def mousePressEvent(self, e):
+        if e.button() == 4 and len(self.o_pixmap_list)>0 : # Undo last zoom-in
+            self.r_pixmap = self.o_pixmap_list.pop()
+            self.setPixmapForImage()
+        #else : self.o_pixmap_list = []
+            
+        self.poi1.setX(e.pos().x())
+        self.poi1.setY(e.pos().y())
+        self.poi2.setX(e.pos().x())
+        self.poi2.setY(e.pos().y())
+        #print 'mousePressEvent: e.x, e.y, e.button =', str(e.x()), str(e.y()), str(e.button())         
+
+        self.isInZoomMode = True
+        self.update()
+
+
+    def mouseReleaseEvent(self, e):
+        self.poi2.setX(e.pos().x())
+        self.poi2.setY(e.pos().y())
+        #print 'mouseReleaseEvent: e.x, e.y, e.button =', str(e.x()), str(e.y()), str(e.button())
+        self.zoomInImage()
+        self.isInZoomMode = False
+
+        
+    def zoomInImage(self):
+        if self.r_pixmap == None:
+            self.resetRectPoints()
+            return
+
+        s_size = self.s_pixmap.size()
+        r_size = self.r_pixmap.size()
+        sw, sh = s_size.width(), s_size.height()
+        rw, rh = r_size.width(), r_size.height()
+        sclx, scly = float(rw)/sw, float(rh)/sh
+
+        #print '='*50
+        #print 'zoomInImage: s_size: w, h = %d, %d' % (sw, sh)
+        #print 'zoomInImage: r_size: w, h = %d, %d' % (rw, rh)
+        
+        p1x, p1y = self.poi1.x(), self.poi1.y()
+        p2x, p2y = self.poi2.x(), self.poi2.y()
+
+        self.resetRectPoints()
+
+        if p2x < 0  : p2x = 0
+        if p2y < 0  : p2y = 0
+        if p2x > sw : p2x = sw
+        if p2y > sh : p2y = sh
+
+        R=10
+        if abs(p2x-p1x) < R : return
+        if abs(p2y-p1y) < R : return
+
+        #print 'zoomInImage: p1: x, y = %d, %d' % (p1x, p1y)
+        #print 'zoomInImage: p2: x, y = %d, %d' % (p2x, p2y)
+
+        x1, y1, x2, y2 = int(p1x*sclx), int(p1y*scly), int(p2x*sclx), int(p2y*scly)
+        #print 'zoomInImage: x1, y1, x2, y2  = %d, %d, %d, %d' % (x1, y1, x2, y2)
+
+        xmin, xmax = min(x1, x2), max(x1, x2)
+        ymin, ymax = min(y1, y2), max(y1, y2)
+        self.o_pixmap_list.append(self.r_pixmap)
+        self.r_pixmap = self.r_pixmap.copy(xmin, ymin, xmax-xmin, ymax-ymin)
+        self.setPixmapForImage()
+        # return and remove the oldest list, Keeps 10 latest images only.
+        if len(self.o_pixmap_list) > 10 : list = self.o_pixmap_list.pop(0)
+
+
+    def resetRectPoints(self):
+        self.poi1.setX(0)
+        self.poi1.setY(0)
+        self.poi2.setX(0)
+        self.poi2.setY(0)
+
+
+    def paintEvent(self, e):
+        super(GUIImage,self).paintEvent(e)
+        #self.counter+=1
+        #print 'paintEvent: self.isInZoomMode: ', self.isInZoomMode, self.counter        
+        #qp = QtGui.QPainter()
+
+        if not self.isInZoomMode : return
+
+        qp = self.qp
+        qp.begin(self)
+        #self.drawPixmap(qp)
+        self.drawRect(qp)
+        qp.end()
+        self.update()
+
+
+    def setPen(self, qp):
+        self.pen.setStyle(QtCore.Qt.DashLine) 
+        self.pen.setWidthF(1) 
+
+
+    def drawRect(self, qp):
+        if self.r_pixmap == None:
+            return
+
+        p1x, p1y = self.poi1.x(), self.poi1.y()
+        p2x, p2y = self.poi2.x(), self.poi2.y()
+
+        R=1
+        if abs(p2x-p1x) < R : return
+        if abs(p2y-p1y) < R : return
+
+        self.rect1.setCoords( p1x,   p1y,   p2x,   p2y)
+        self.rect2.setCoords( p1x+1, p1y+1, p2x-1, p2y-1)
+        qp.setPen  (self.pen1)
+        qp.drawRect(self.rect1);
+        qp.setPen  (self.pen2)
+        qp.drawRect(self.rect2);
+
+
+    def drawPixmap(self, qp):
+        if self.r_pixmap != None:
+            qp.drawPixmap(0,0,self.s_pixmap)
+
+#-----------------------------
+
+    #def mousePressEvent(self, event):
+    #    print 'event.x, event.y, event.button =', str(event.x()), str(event.y()), str(event.button())         
+
+    #def mouseReleaseEvent(self, event):
+    #    print 'event.x, event.y, event.button =', str(event.x()), str(event.y()), str(event.button())                
+
+#http://doc.qt.nokia.com/4.6/qt.html#Key-enum
+    def keyPressEvent(self, event):
+        #print 'event.key() = %s' % (event.key())
+        if event.key() == QtCore.Qt.Key_Escape:
+            #self.close()
+            self.SHowIsOn = False    
+            pass
+
+        if event.key() == QtCore.Qt.Key_B:
+            #print 'event.key() = %s' % (QtCore.Qt.Key_B)
+            pass
+
+        if event.key() == QtCore.Qt.Key_Return:
+            #print 'event.key() = Return'
+            pass
+
+        if event.key() == QtCore.Qt.Key_Home:
+            #print 'event.key() = Home'
+            pass
+
+#-----------------------------
+#  In case someone decides to run this module
+#
+def test_GUIImage():
+    app = QtGui.QApplication(sys.argv)
+    ex  = GUIImage()
+    ex.grabEntireWindow()
+    ex.show()
+    app.exec_()
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class LocalParameter :
+    """This helper class allows to access local parameters through the reference in the list."""
+    _val=None
+
+    def __init__ ( self, val=None ) :
+        self._val = val
+
+    def setValue ( self, val ) :    
+        self._val = val
+
+    def getValue (self) :    
+        return self._val
+
+    def value (self) :    
+        return self._val
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+class GUIGrabSubmitELog ( QtGui.QWidget ) :
+    """GUI sets fields for ELog posting"""
+
+    name = 'GUIGrabSubmitELog' # for logger
+
+    # Reserve local parameters for ALL FIELDS in GUI
+    usr = LocalParameter ()
+    des = LocalParameter ()
+    ins = LocalParameter ()
+    in2 = LocalParameter ()
+    exp = LocalParameter ()
+    ex2 = LocalParameter ()
+    run = LocalParameter ()
+    tag = LocalParameter ()
+    res = LocalParameter ()
+    msg = LocalParameter ()
+
+    def __init__ ( self, parent=None, cfname=None, ifname=None, ofname=None, help_msg=None, lbws=None, lbws2=None ) :
+        QtGui.QWidget.__init__(self)
+        self.setGeometry(50, 10, 620, 620)
+        self.setWindowTitle('Grubber for ELog')
+        self.setFrame()
+
+        #---- Set all initial parameters -----------------------
+
+        self.setConfigPars(cfname)              ### <===========
+
+        if ifname is None : self.ifname = cp.img_infname.value()
+        else              : self.ifname = ifname
+
+        if ofname is None : self.ofname = cp.img_oufname.value()
+        else              : self.ofname = ofname
+
+        self.parent     = parent
+        self.lbws       = lbws
+        self.lbws2      = lbws2
+        self.count_msgs = 0
+
+        self.setLocalPars()            ### <==========
+
+        if help_msg==None : self.help_msg = self.help_message()
+        else              : self.help_msg = help_msg
+
+        cp.printParameters()
+
+        self.time_of_last_click = None
+        self.time_out_double_click = 3 # sec
+
+        if self.lbws is not None :
+            self.list_of_exps = self.lbws.get_list_of_experiments()
+            self.exp_ind_in_list = self.list_of_exps.index(self.exp.value()) if (self.exp.value() in self.list_of_exps) else 0
+
+        #-------------------------------------------------------
+
+        self.wimg = GUIImage(self)      
+
+        self.cbx_copy = QtGui.QCheckBox('Copy to ins. ELog', self)
+        self.cbx_copy.setChecked(False)
+
+        #self.cbx_more = QtGui.QCheckBox('More options', self)
+        #self.cbx_more.setChecked( cp.cbx_more_options.value() )
+
+        self.box_tag = QtGui.QComboBox( self ) 
+        self.box_tag.addItems(self.list_of_tags())
+        self.box_tag.setCurrentIndex(0) # self.list_of_tags.index(cp.elog_post_tag.value()))
+
+        self.box_exp = QtGui.QComboBox( self ) 
+        self.box_exp.addItems(self.list_of_exps)
+        self.box_exp.setCurrentIndex(self.exp_ind_in_list)
+
+        self.lab_status   = QtGui.QLabel('Last submitted message ID: ' + self.res.value())
+        #self.lab_status  = QtGui.QLineEdit('Last submitted message ID: ' + self.res.value()) 
+        #self.lab_status  = QtGui.QPushButton('Last submitted message ID: ' + self.res.value())
+ 
+        self.but_grab     = QtGui.QPushButton('&Grab')
+        self.but_load     = QtGui.QPushButton('&Load')
+        self.but_reset    = QtGui.QPushButton('&Clear')
+        self.but_save     = QtGui.QPushButton('Save img')
+        self.but_update   = QtGui.QPushButton('Set current exp')
+        self.but_elog     = QtGui.QPushButton('&Submit') #u'\u2192 &ELog'
+        self.but_logger   = QtGui.QPushButton('Logger')
+        self.but_help     = QtGui.QPushButton('&Help')
+        self.but_quit     = QtGui.QPushButton('&Exit')
+        #self.but_save_cfg = QtGui.QPushButton('Save cfg')
+
+        self.setHBox1Layout()        
+        self.setHBox2Layout()        
+ 
+        self.lab_usr = QtGui.QLabel('Author:')
+        self.lab_des = QtGui.QLabel('Description:')
+        self.lab_ins = QtGui.QLabel('Instrument:')
+        self.lab_exp = QtGui.QLabel('Experiment:')
+        self.lab_ex2 = QtGui.QLabel('Instrumental ELog:')
+        self.lab_run = QtGui.QLabel('Run number:')
+        self.lab_tag = QtGui.QLabel('Tag:')
+        self.lab_res = QtGui.QLabel('Resp. to ID:')
+        self.lab_msg = QtGui.QLabel('Message:')
+        self.lab_att = QtGui.QLabel(u'Attachement \u21B4')
+
+        self.edi_usr = QtGui.QLineEdit( self.usr.value() ) 
+        self.edi_des = QtGui.QLineEdit( self.des.value() ) 
+        self.edi_ins = QtGui.QLineEdit( self.ins.value() ) 
+        #self.edi_exp = QtGui.QLineEdit( self.exp.value() )
+        self.edi_ex2 = QtGui.QLineEdit( self.ex2.value() )
+        self.edi_run = QtGui.QLineEdit( self.run.value() )
+        self.edi_tag = QtGui.QLineEdit( self.tag.value() )
+        self.edi_res = QtGui.QLineEdit( self.res.value() )
+        self.edi_msg = QtGui.QTextEdit( self.msg.value() )
+
+        #self.edi_res.setValidator(QtGui.QIntValidator(0,9000000,self))
+
+        self.grid = QtGui.QGridLayout()
+        self.grid_row = 0
+
+        self.grid.addWidget(self.lab_msg,    self.grid_row+0, 0)
+        self.grid.addWidget(self.edi_msg,    self.grid_row+0, 1, 3, 5)
+
+        self.grid.addWidget(self.lab_usr,    self.grid_row+3, 0)
+        self.grid.addWidget(self.edi_usr,    self.grid_row+3, 1)
+        self.grid.addWidget(self.lab_ins,    self.grid_row+3, 2)
+        self.grid.addWidget(self.edi_ins,    self.grid_row+3, 3)
+        self.grid.addWidget(self.lab_exp,    self.grid_row+3, 4)
+        self.grid.addWidget(self.box_exp,    self.grid_row+3, 5)
+
+        self.grid.addWidget(self.lab_run,    self.grid_row+4, 0)
+        self.grid.addWidget(self.edi_run,    self.grid_row+4, 1, 1, 2)
+        self.grid.addWidget(self.lab_ex2,    self.grid_row+4, 2, 1, 3)
+        self.grid.addWidget(self.edi_ex2,    self.grid_row+4, 5)
+
+        self.grid.addWidget(self.lab_res,    self.grid_row+5, 0)
+        self.grid.addWidget(self.edi_res,    self.grid_row+5, 1, 1, 2)
+        self.grid.addWidget(self.lab_status, self.grid_row+5, 2, 1, 4)
+
+        self.grid.addWidget(self.lab_des,    self.grid_row+6, 0)
+        self.grid.addWidget(self.edi_des,    self.grid_row+6, 1, 1, 2)
+        self.grid.addWidget(self.but_update, self.grid_row+6, 5)
+
+        self.grid.addWidget(self.lab_tag,    self.grid_row+7, 0)
+        self.grid.addWidget(self.edi_tag,    self.grid_row+7, 1)
+        self.grid.addWidget(self.box_tag,    self.grid_row+7, 2, 1, 2)
+        self.grid.addWidget(self.lab_att,    self.grid_row+7, 5)
+
+        self.hbox1_widg = QtGui.QWidget(self) 
+        self.hbox1_widg.setLayout(self.hbox1)
+        self.hbox1_widg.setFixedHeight(24)
+        self.hbox1_widg.setContentsMargins(0,-10, 0,-10)
+        
+        self.vbox2 = QtGui.QVBoxLayout()
+        self.vbox2.addLayout(self.grid)
+        self.vbox2_widg = QtGui.QWidget(self) 
+        self.vbox2_widg.setLayout(self.vbox2)
+        self.vbox2_widg.setFixedHeight(270)
+        self.vbox2_widg.setFixedWidth(580)
+        #self.vbox2_widg.setMinimumWidth(400)
+        self.vbox2_widg.setContentsMargins(0,-10, 0,-10)
+
+        self.vbox = QtGui.QVBoxLayout()
+        #self.vbox.addLayout(self.hbox1)
+        #self.vbox.addLayout(self.vbox2)
+        self.vbox.addWidget(self.hbox1_widg)
+        self.vbox.addWidget(self.vbox2_widg)
+        self.vbox.addWidget(self.wimg)
+        self.vbox.addLayout(self.hbox2)
+
+        self.setLayout(self.vbox)
+
+        self.list_of_fields = [
+            [self.lab_usr, self.edi_usr, self.usr],
+            [self.lab_des, self.edi_des, self.des],
+            [self.lab_ex2, self.edi_ex2, self.ex2],
+            [self.lab_run, self.edi_run, self.run], 
+            [self.lab_tag, self.edi_tag, self.tag],
+            [self.lab_res, self.edi_res, self.res],
+            [self.lab_ins, self.edi_ins, self.ins] ]
+            #[self.lab_exp, self.edi_exp, self.exp],
+
+        for [lab, edi, par] in self.list_of_fields :
+                self.connect(edi, QtCore.SIGNAL('editingFinished ()'), self.onEdit) 
+
+        self.connect(self.edi_msg, QtCore.SIGNAL('textChanged ()'), self.onEditMessage) 
+
+        self.connect(self.but_grab,     QtCore.SIGNAL('clicked()'),       self.on_but_grab)
+        self.connect(self.but_reset,    QtCore.SIGNAL('clicked()'),       self.on_but_reset)
+        self.connect(self.but_load,     QtCore.SIGNAL('clicked()'),       self.on_but_load)
+        self.connect(self.but_save,     QtCore.SIGNAL('clicked()'),       self.on_but_save)
+        self.connect(self.but_update,   QtCore.SIGNAL('clicked()'),       self.on_but_update)
+        self.connect(self.but_elog,     QtCore.SIGNAL('clicked()'),       self.on_but_elog)
+        self.connect(self.but_logger,   QtCore.SIGNAL('clicked()'),       self.on_but_logger)
+        self.connect(self.but_help,     QtCore.SIGNAL('clicked()'),       self.on_but_help)
+        self.connect(self.but_quit,     QtCore.SIGNAL('clicked()'),       self.on_but_quit)
+        #self.connect(self.but_save_cfg, QtCore.SIGNAL('clicked()'),       self.on_but_save_cfg)
+
+        self.connect(self.cbx_copy,  QtCore.SIGNAL('stateChanged(int)'),        self.on_cbx_copy)
+        self.connect(self.box_tag,   QtCore.SIGNAL('currentIndexChanged(int)'), self.on_box_tag)
+        self.connect(self.box_exp,   QtCore.SIGNAL('currentIndexChanged(int)'), self.on_box_exp)
+        #self.connect(self.cbx_more,  QtCore.SIGNAL('stateChanged(int)'),        self.on_cbx_more)
+
+        #self.setIcons()
+
+        self.setStyle()
+        self.setFieldsReadOnlySet1()                
+        #self.on_cbx_more()
+        self.set_but_save_visibility()
+        self.on_cbx_copy()
+
+        self.setToolTips()
+
+        self.notification('start')
+
+        self.showImage(is_visible=False)
+
+        self.set_but_reset()
+
+        
+    #-------------------
+    #  Public methods --
+    #-------------------
+
+    def setConfigPars(self, cfname) :
+        if cfname is None :
+            return # use default config parameters
+        else :
+            cp.fname_cp = self.cfname = cfname # in order to save parameters at exit
+            logger.info('Re-define cofiguration pars file name: '+cfname, self.name )
+            if os.path.exists(cfname) :
+                cp.readParametersFromFile(cfname)
+
+
+
+    def list_of_tags(self) :
+        lst = ['Select tag']
+        if self.lbws is not None :
+            lst += self.lbws.get_list_of_tags()
+            #logger.info('List of known tags: '+str(lst), self.name )
+        return lst
+
+
+
+    def setLocalPars(self):
+        self.usr.setValue( self.lbws.usr )
+        self.ins.setValue( self.lbws.ins )
+        self.exp.setValue( self.lbws.exp )
+        self.in2.setValue( self.lbws2.ins )
+        self.ex2.setValue( self.lbws2.exp )
+        self.run.setValue( '' )
+        self.res.setValue( '' )
+        self.msg.setValue( '' )
+        self.tag.setValue( cp.elog_post_tag.value() )
+        self.des.setValue( cp.elog_post_des.value() )
+
+
+    def setExperiment(self, exp):
+        if self.lbws is not None : self.lbws.set_experiment(exp)
+
+
+    def setToolTips(self):
+
+        logger.info('Set tool-tips for all fields', self.name )
+
+        #self           .setToolTip('Grabber for ELog GUI')
+        self.edi_usr   .setToolTip('Sender of the message')
+        self.edi_des   .setToolTip('Short description of the message')
+        self.edi_ins   .setToolTip('Instrument')
+        #self.edi_exp   .setToolTip('Experiment')
+        self.edi_ex2   .setToolTip('Effective experiment for mirror \nmessage in instrumental ELog')
+        self.edi_run   .setToolTip('Use it if posting for specific run.\n"Resp.to ID" field should be empty.')
+        self.edi_tag   .setToolTip('Edit message tag')
+        self.edi_res   .setToolTip('Use it if replying to an existing message\n"Run number" field should be empty.')
+        self.edi_msg   .setToolTip('Message for posting in ELog')
+        self.but_reset .setToolTip('Clear graphical window in "Attachement"') 
+        self.but_grab  .setToolTip('Grab image of current monitor') 
+        self.but_load  .setToolTip('Load image from file') 
+        self.but_save  .setToolTip('Save image in file') 
+        self.but_update.setToolTip('Update list of active expts\nand set current') 
+        self.but_elog  .setToolTip('Submit message with attachement to ELog') 
+        self.but_logger.setToolTip('Open/Close logger window') 
+        self.but_quit  .setToolTip('Save configuration parameters in file \nand exit this application. \n"x"-just exit application.') 
+        self.but_help  .setToolTip('Get help message \nin the logger window') 
+        self.cbx_copy  .setToolTip('On/off submission of the message copy \nto the instrumental ELog') 
+        #self.cbx_more  .setToolTip('Show more control buttons') 
+
+        self.box_exp   .setToolTip('Select experiment\n from menu') 
+        self.box_tag   .setToolTip('Select tag from menu') 
+
+        #self.act = QtGui.QAction(self)
+        #self.act.setPriority(QtGui.QAction.HighPriority)
+        #self.setVisible(True)
+
+        
+    def setIcons(self) :
+        cp.loadIcons()
+        self.but_elog    .setIcon(cp.icon_mail_forward)
+        self.but_load    .setIcon(cp.icon_browser) # icon_contents)
+        self.but_save    .setIcon(cp.icon_save)
+        self.but_grab    .setIcon(cp.icon_monitor)
+        self.but_reset   .setIcon(cp.icon_reset)
+        self.but_logger  .setIcon(cp.icon_contents)
+        self.but_help    .setIcon(cp.icon_help)
+        self.but_quit    .setIcon(cp.icon_exit)
+
+
+    def setHBox1Layout(self):
+        self.hbox1 = QtGui.QHBoxLayout()
+        self.hbox1.addWidget(self.but_grab)
+        self.hbox1.addWidget(self.but_load)
+        self.hbox1.addWidget(self.but_reset)
+        self.hbox1.addStretch(1)
+        self.hbox1.addWidget(self.cbx_copy)
+        self.hbox1.addWidget(self.but_elog)
+        #self.setLayout(self.hbox1)
+
+
+    def setHBox2Layout(self):
+        self.hbox2 = QtGui.QHBoxLayout()
+        #self.hbox2.addWidget(self.cbx_more)
+        self.hbox2.addWidget(self.but_help)
+        self.hbox2.addWidget(self.but_logger)
+        self.hbox2.addWidget(self.but_save)
+        #self.hbox2.addWidget(self.but_save_cfg)
+        self.hbox2.addStretch(1)
+        self.hbox2.addWidget(self.but_quit)
+        #self.setLayout(self.hbox2)
+
+
+    def setHBox2ButsVisible(self, is_visible=True):
+        self.but_help  .setVisible(is_visible)
+        self.but_logger.setVisible(is_visible)
+        self.but_quit  .setVisible(is_visible)
+        #self.but_save  .setVisible(is_visible)
+
+        self.lab_att   .setVisible(is_visible)
+
+        
+    def setFrame(self):
+        self.frame = QtGui.QFrame(self)
+        self.frame.setFrameStyle( QtGui.QFrame.Box | QtGui.QFrame.Sunken ) #Box, Panel | Sunken, Raised 
+        self.frame.setLineWidth(0)
+        self.frame.setMidLineWidth(1)
+        self.frame.setGeometry(self.rect())
+        #self.frame.setVisible(False)
+
+
+    def showImage(self, is_visible=True):
+
+        self.wimg.setVisible(is_visible)
+        self.setHBox2ButsVisible(is_visible)
+
+        if is_visible :
+           #self.setGeometry(50, 10, 620, 620)
+           self.setMinimumHeight(620)
+           self.setMaximumHeight(2000)
+        else :
+           self.setFixedHeight(320)
+           self.resize(600,320)
+
+
+    def setStyle(self):
+        #self.setMinimumWidth(400)
+        #self.setMinimumHeight(320)
+        #self.setFixedHeight(350)
+        #self.setMinimumSize(620,420)
+
+        #self.setStyleSheet(cp.styleBkgd)
+        
+        width_edi_short =  40
+        width_edi       = 110
+        width_edi_exp   = 110
+        width_com       =  85
+        width_com_short =  34
+
+        self.lab_msg.setStyleSheet(cp.styleLabel)
+        self.lab_msg.setFixedWidth(width_com)
+        self.lab_att.setStyleSheet(cp.styleLabel)
+        self.lab_ins.setStyleSheet(cp.styleLabel)
+        self.lab_exp.setStyleSheet(cp.styleLabel)
+        
+        for [lab, edi, par] in self.list_of_fields :
+            lab.setStyleSheet(cp.styleLabel)
+            lab.setAlignment(QtCore.Qt.AlignLeft)
+            lab.setFixedWidth(width_com)
+            edi.setFixedWidth(width_edi)
+
+        self.edi_ins.setFixedWidth(width_edi_short)
+        #self.edi_exp.setFixedWidth(width_edi_exp)
+        self.edi_ex2.setFixedWidth(width_edi_exp)
+        self.box_exp.setFixedWidth(width_edi_exp)
+        
+        self.lab_ins.setAlignment(QtCore.Qt.AlignRight)
+        self.lab_exp.setAlignment(QtCore.Qt.AlignRight)
+        self.lab_ex2.setAlignment(QtCore.Qt.AlignRight)
+        #self.lab_ex2.setMinimumWidth(132)
+        self.lab_ex2.setMaximumWidth(400)
+
+        #self.edi_ins.setFixedWidth(width_edi_short)
+        #self.lab_att.setFixedWidth(width_com_short)
+        #self.lab_msg.setFixedWidth(width_com_short)
+        #self.lab_run.setFixedWidth(width_edi_short)
+        #self.edi_run.setFixedWidth(width_edi_short)
+        self.edi_msg.setMinimumWidth(400)
+        self.edi_msg.setFixedHeight(80)
+
+        #self.edi_att.setMinimumWidth(width_edi_long)
+
+        self.but_grab    .setStyleSheet (cp.styleButton) 
+        self.but_reset   .setStyleSheet (cp.styleButton) 
+        self.but_load    .setStyleSheet (cp.styleButton) 
+        self.but_save    .setStyleSheet (cp.styleButton) 
+        self.but_update  .setStyleSheet (cp.styleButton) 
+        #self.but_elog    .setStyleSheet (cp.styleButton) 
+        self.but_elog    .setStyleSheet (cp.styleButtonGood) 
+        self.but_logger  .setStyleSheet (cp.styleButton) 
+        self.but_help    .setStyleSheet (cp.styleButton) 
+        #self.but_save_cfg.setStyleSheet (cp.styleButton) 
+        self.but_quit    .setStyleSheet (cp.styleButtonBad) 
+
+        self.cbx_copy    .setStyleSheet (cp.styleLabel)
+        self.box_tag     .setStyleSheet (cp.styleButton)
+        self.box_exp     .setStyleSheet (cp.styleButton)
+        #self.cbx_more    .setStyleSheet (cp.styleLabel)
+
+        #self.lab_status  .setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
+        #self.lab_status  .setStyleSheet (cp.styleButton) #cp.styleLabel)
+        #self.lab_status  .setStyleSheet (cp.styleBkgd) #cp.styleEditInfo)
+        self.lab_status  .setStyleSheet (cp.styleLabel)
+        self.lab_status  .setAlignment(QtCore.Qt.AlignLeft)
+        self.lab_status  .setTextInteractionFlags (QtCore.Qt.TextSelectableByMouse)
+        
+
+    def setFieldsReadOnlySet1(self):
+        self.edi_usr.setReadOnly(True)
+        self.edi_ins.setReadOnly(True)
+        #self.edi_exp.setReadOnly(True)
+        self.edi_ex2.setReadOnly(True)
+        #self.edi_run.setReadOnly(False)
+        #self.edi_tag.setReadOnly(False)
+        #self.edi_des.setReadOnly(False)
+        #self.edi_res.setReadOnly(False)
+        #self.edi_msg.setReadOnly(False)
+
+        self.setFieldsStyle()
+
+
+    def setFieldsStyle(self):
+        for [lab, edi, par] in self.list_of_fields :
+            if edi.isReadOnly() :
+                edi.setStyleSheet (cp.styleEditInfo)
+            else                :
+                edi.setStyleSheet (cp.styleEdit)
+
+        self.edi_msg.setStyleSheet (cp.styleEdit)
+
+
+    def setParent(self,parent) :
+        self.parent = parent
+
+
+    def resizeEvent(self, e):
+        #logger.debug('resizeEvent', self.name) 
+        self.frame.setGeometry(self.rect())
+        #print 'resizeEvent: %s' % str(self.size())
+
+ 
+    def moveEvent(self, e):
+        pass
+
+
+    def closeEvent(self, event):
+        logger.debug('closeEvent', self.name)
+        if  cp.guilogger != None :
+            cp.guilogger.close()
+            #del cp.guilogger
+            cp.guilogger = None
+
+        if  cp.guihelp   != None :
+            cp.guihelp.close()
+            #del cp.guihelp
+            cp.guihelp = None
+
+        #try    : cp.guilogger.close()
+        #except : pass
+
+        #print '%s.closeEvent()' % self.name
+
+        self.notification('stop')
+
+
+    def notification(self, msg=''):
+        try :
+            cmt = 'copy-is-%s-%s-%d' % ({False:'off', True:'on'}[self.cbx_copy.isChecked()], msg, self.count_msgs)
+            d_fields = {'exp':( 8,str(self.exp.value()))\
+                       ,'run':( 4,str(self.run.value()))\
+                       ,'cmt':(64,cmt)\
+                       }
+            ndb = NotificationDBInc(table='logbookgrabber_qt', dict_add_fields=d_fields)
+            ndb.add_record(mode='self-disabled')
+            #ndb.add_record(mode='enabled')
+        except :
+            pass
+
+
+    def on_but_quit(self):
+        logger.debug('on_but_quit', self.name )
+        self.on_but_save_cfg()
+        self.close()
+
+
+    def onEdit(self):
+        logger.debug('onEdit', self.name)
+        for [lab, edi, par] in self.list_of_fields :
+            if edi.isModified() :            
+                edi.setModified(False)
+                par.setValue(str(edi.displayText()))
+                msg = 'Set the local value of ' + str(lab.text()) +\
+                      ' ' + par.value()
+                logger.info(msg, self.name )
+                #print msg
+
+
+    def onEditMessage(self):
+        #"""Do nothing at edition time. Text is picked-up at submission ans saving"""
+        #pass
+        #print 'Text msg is updated'
+        self.updateLocalParMsg()
+        self.set_but_reset()
+
+
+    def updateLocalParMsg(self):
+        self.msg.setValue(str(self.edi_msg.document().toPlainText()))
+
+
+    def on_box_tag(self, ind):
+        tag_selected = self.box_tag.currentText()
+        if ind>0 :
+            cp.elog_post_tag.setValue( tag_selected )
+            self.tag.setValue(tag_selected)  
+            self.edi_tag.setText( tag_selected ) 
+            logger.info('Selected tag: ' + tag_selected, self.name)
+
+            # Return the title of the combo box
+            self.box_tag.setCurrentIndex(0) # self.list_of_tags.index(cp.elog_post_tag.value()))
+
+
+    def on_box_exp(self, ind):
+        #print 'on_box_exp'
+        if not self.box_exp.isEnabled() : return 
+        exp_selected = self.box_exp.currentText()
+        self.exp.setValue(exp_selected)
+        self.lbws.set_experiment(exp_selected)
+        self.set_tags()
+
+
+    def set_tags(self):
+        lst = self.list_of_tags()
+        self.box_tag.clear()
+        self.box_tag.addItems(lst)
+        self.box_tag.setCurrentIndex(0)
+
+        tag_txt = lst[1] if len(lst)>1 else cp.elog_post_tag.value_def()
+        self.tag.setValue(tag_txt)
+        self.edi_tag.setText(tag_txt) 
+
+
+    def on_but_update(self):
+        if self.lbws is None : return 
+
+        exp_current = self.lbws.get_current_experiment()
+        self.list_of_exps = self.lbws.get_list_of_experiments()
+        self.exp_ind_in_list = self.list_of_exps.index(exp_current) if (exp_current in self.list_of_exps) else 0
+
+        #print 'exp_current     : ', exp_current
+        #print 'list_of_exps    : ', self.list_of_exps
+        #print 'exp_ind_in_list : ', self.exp_ind_in_list
+
+        self.lbws.set_experiment(exp_current)
+        self.exp.setValue(exp_current)
+
+        self.box_exp.setEnabled(False)
+        self.box_exp.clear()
+        self.box_exp.addItems(self.list_of_exps)
+        self.box_exp.setCurrentIndex(self.exp_ind_in_list)
+        self.box_exp.setEnabled(True)
+
+        self.set_tags()
+
+
+    def on_cbx_copy(self):
+        #if self.cbx_copy .hasFocus() :
+        cbx_status = self.cbx_copy.isChecked()
+        dic_stat = {False:'disabled.', True:'enabled.'}
+        logger.info('Check box is changed: the message copy to the instrumental ELog is ' + dic_stat[cbx_status], self.name )
+
+        self.lab_ex2   .setVisible(cbx_status)
+        self.edi_ex2   .setVisible(cbx_status)
+
+        #self.setFieldsStyle()
+
+
+#    def on_cbx_more(self):
+#        #if self.cbx_copy .hasFocus() :
+#        is_visible = self.cbx_more.isChecked()
+#        dic_stat = {False:'less', True:'more'}
+#        logger.info('Check box status is changed: show %s options' % (dic_stat[is_visible]), self.name )
+#        cp.cbx_more_options.setValue(is_visible)
+
+#        #self.but_grab    .setVisible(True)
+#        #self.but_reset   .setVisible(True)
+#        #self.but_load    .setVisible(True)
+#        #self.but_elog    .setVisible(True)
+#        #self.but_quit    .setVisible(True) 
+#        #self.cbx_copy    .setVisible(is_visible)
+#        self.but_logger  .setVisible(is_visible) 
+#        self.but_help    .setVisible(is_visible)
+#        #self.but_save_cfg.setVisible(False)
+
+#        self.set_but_save_visibility()
+
+
+    def set_but_save_visibility(self):
+        if self.wimg.r_pixmap is None :
+            self.but_save.setVisible(False)
+        else :
+            self.but_save.setVisible(True) # self.cbx_more.isChecked())
+
+
+    def printListOfFields(self):
+        for [lab, edi, par] in self.list_of_fields :
+            print '%15s parameter: %15s    local: %15s' % (lab.text(), par.value())
+
+
+    def set_but_reset(self):
+        #logger.info('set_but_reset', self.name)
+
+        if self.wimg.isVisible() :
+            self.but_reset.setText('&Clear Img') 
+            self.but_reset.setVisible(True) 
+
+        elif self.msg.value() != '' :
+        #elif not str(self.edi_msg.document().toPlainText()) != '' :
+            self.but_reset.setText('&Clear Msg') 
+            self.but_reset.setVisible(True) 
+
+        else :
+            self.but_reset.setText('&Clear') 
+            self.but_reset.setVisible(False)
+
+#-----------------------------
+
+    def on_but_grab(self):
+        logger.info('Grab image of current monitor', self.name)
+        if self.wimg != None :
+
+            self.but_elog.setStyleSheet(cp.styleButton) 
+            self.but_elog.setEnabled(False)
+            #self.but_elog.setVisible(False)
+            #self.emit(QtCore.SIGNAL('grab_image()'))
+
+            self.repaint()
+            #------------
+            self.wimg.grabImage()
+            self.showImage(is_visible=True)
+            self.set_but_save_visibility()
+            self.set_but_reset()
+            #------------
+ 
+            self.but_elog.setStyleSheet(cp.styleButtonGood) 
+            self.but_elog.setEnabled(True)
+ 
+
+    def on_but_reset(self):
+        if self.wimg.isVisible() :
+            logger.info('Reset/clear image', self.name)
+            self.wimg.resetImage()
+            self.showImage(is_visible=False)
+            self.set_but_save_visibility()
+
+        #elif str(self.edi_msg.document().toPlainText()) != '' :
+        elif self.msg.value() != '' :
+            #print 'RESET MSG HERE'
+            self.edi_msg.setText('')
+            self.updateLocalParMsg()
+
+        else :
+            pass
+        
+        self.set_but_reset()
+
+
+    def on_but_load(self):
+        logger.info('Select file name and Load image from file', self.name )
+        path = get_open_fname_through_dialog_box(self, self.ifname, 'Select file with text image',
+               filter='Images (*.ppm *.bmp *.jpg *.jpeg *.png *.xbm *.xpm *.gif *.pbm *.pgm)\nAll files (*)')
+              #filter='*.ppm *.bmp *.jpg *.jpeg *.png *.xbm *.xpm *.gif *.pbm *.pgm;')
+        if path == None or path == '' :
+            logger.info('File name is empty, loading is cancelled...', self.name )
+            return
+
+        #print 'Selected file name: ' + path
+        logger.info('Selected file name:' + path, self.name)
+        self.wimg.loadImageFromFile(path)
+        self.ifname = path
+        cp.img_infname.setValue(path)
+        self.showImage(is_visible=True)
+        self.set_but_save_visibility()
+        self.set_but_reset()
+
+
+    def on_but_save(self):
+
+        if self.wimg.r_pixmap is None :
+            path = ''            
+            logger.warning('Image is empty, there is nothing to save. Saving is cancelled...', self.name )
+            return
+
+        logger.info('Select file name and save image in file', self.name )
+
+        path = self.ofname
+        #dir, fname = os.path.split(path)
+        path  = str( QtGui.QFileDialog.getSaveFileName(self,
+                                                       caption='Select file to save the plot',
+                                                       directory = path,
+                                                       filter = '*.ppm *.bmp *.jpg *.jpeg *.png *.pbm *.pgm *.xbm *.xpm'
+                                                       ) )
+        if path == '' :
+            logger.warning('File name is empty, saving is cancelled.', self.name )
+            return
+
+        logger.info('Save image in file: ' + path, self.name )
+        self.wimg.saveImageInFile(path)
+        self.ofname = path
+        cp.img_oufname.setValue(path)
+
+#-----------------------------
+
+    def submission_is_allowed(self):
+        """Check for timeoot to prevent double-clicking on Submit button"""
+        t_click = time()
+        if self.time_of_last_click is None:
+            self.time_of_last_click = t_click
+            return True
+
+        dt = t_click-self.time_of_last_click
+        #print 'dt = ', dt
+        if dt > self.time_out_double_click :
+            self.time_of_last_click = t_click
+            return True
+
+        return False
+
+#-----------------------------
+
+    def on_but_elog(self):
+
+        if not self.submission_is_allowed() : return
+
+        logger.info('Send message to ELog:', self.name )
+
+        self.but_elog.setEnabled(False)
+
+        if self.wimg.r_pixmap is None :
+            path = ''            
+            logger.warning('1. Image is empty, message will be sent w/o attachement', self.name )
+        else :
+            file =tempfile.NamedTemporaryFile(mode='r+b',suffix='.jpeg') # '.png')
+            path = file.name # self.ofname
+            logger.info('1. Save image for attachement in temporary file: ' + path, self.name )
+            self.wimg.saveImageInFile(path)
+
+        self.msg.setValue(str(self.edi_msg.document().toPlainText()))
+
+        exp = self.exp.value() 
+        tag = self.tag.value() # str(self.edi_tag.displayText())           
+        run = self.run.value() # str(self.edi_run.displayText())           
+        res = self.res.value() # str(self.edi_res.displayText())           
+        des = self.des.value() # str(self.edi_des.displayText())           
+        msg = self.msg.value() # str(self.edi_msg.document().toPlainText())
+        
+        logger.info('2. Submit message to ELog', self.name )
+
+        log_text = self.get_text_of_msg_parameters(msg, run, res, tag, des, path) 
+        logger.info('ELog submission parameters:'+log_text, self.name )
+
+        if not self.is_valid_message(msg) :
+            self.but_elog.setEnabled(True)
+            return
+
+        msg_id = 0 
+        if self.lbws is not None :
+            result = self.lbws.post(msg, run, res, tag, des, path)
+            logger.info('Responce of submission: ' + str(result), self.name )
+
+            msg_id = self.get_msg_id_from_result(result, comment='')
+
+            status_txt = 'Last submitted message ID: ' + str(msg_id)
+            self.setStatus( msg=status_txt )
+
+            #NORMAL: result: {'status': 'success', 'message_id': '125263'}
+            #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
+
+        # Submit copy of the message to the instrument ELog
+        if self.cbx_copy.isChecked() and self.lbws2 is not None :
+            run, res = '', ''
+            lst_tag = [tag, exp]
+            msg2_id = 0
+
+            log_text = self.get_text_of_msg_parameters(msg, run, res, lst_tag, des, path) 
+            logger.info('Instrumental ELog parameterss:'+log_text, self.name )
+
+            result2 = self.lbws2.post_lists(msg, run, res, lst_tag, [des], [path])
+            msg2_id = self.get_msg_id_from_result(result2, comment='Responce of submission to instrumental ELog: ')
+
+        self.on_but_reset()
+        self.but_elog.setEnabled(True)
+
+        self.reset_fields_after_submission()
+
+        self.count_msgs += 1         
+
+#-----------------------------
+
+    def reset_fields_after_submission(self) :
+        self.run.setValue('')
+        self.edi_run.setText(self.run.value())
+        self.cbx_copy.setChecked(False)
+
+#-----------------------------
+
+    def get_msg_id_from_result(self, result, comment='') :
+
+        if result['status'] == 'success':
+            msg_id = str(result['message_id'])
+            logger.info(comment + 'New message ID:'+msg_id, self.name )
+            return msg_id
+            
+        else :
+            #print 'Error:', result['message']
+            resp = str(result['message'])
+            confirm_dialog_box(self, text='Message to ELog is not submitted.\n' + resp)
+            msg_id = ''
+            return msg_id
+
+#-----------------------------
+
+    def is_valid_message(self, msg_text) :
+        if self.run.value() != '' and self.res.value() != '' :
+
+            msg = "Inconsistent input, submission to ELog is cancelled:" \
+                  "\nRun number can't be used togher with the parent message ID." \
+                  "\nChoose the right context to post the screenshot and try again."
+
+            confirm_dialog_box(self, text=msg)
+            return False
+
+        if msg_text == '' :
+            msg = 'Inconsistent input, submission to ELog is cancelled:' \
+                  '\nMessage box is empty.' \
+                  '\nPlease add your comment in the "Message" box.'
+            confirm_dialog_box(self, text=msg)
+            return False
+            
+        else :
+            return True
+
+#-----------------------------
+
+    def get_text_of_msg_parameters(self, msg, run, res, tag, des, att) :
+        list_of_tits = ['msg', 'run', 'res', 'tag', 'des', 'att']
+        list_of_pars = [ msg,   run,   res,   tag,   des,   att]
+        log_text = ''
+        for tit,par in zip(list_of_tits, list_of_pars) :
+            log_text += '\n   %5s : ' % (tit) + str(par)
+        return log_text
+        
+#-----------------------------
+
+    def on_but_save_cfg(self):
+        logger.debug('on_but_save_cfg',  self.name )
+        cp.elog_post_tag.setValue( self.tag.value() )
+        cp.elog_post_des.setValue( self.des.value() )
+        cp.saveParametersInFile( cp.fname_cp )
+
+
+    def on_but_logger (self):       
+        logger.debug('on_but_logger',  self.name )
+        #try  :
+        if cp.guilogger!=None :
+            cp.guilogger.close()
+            #self.but_logger.setStyleSheet(cp.styleButtonBad)
+            cp.guilogger=None
+            logger.info('Logger GUI window is closed',  self.name )
+        #except :
+        else :
+            #self.but_logger.setStyleSheet(cp.styleButtonGood)
+            cp.guilogger = GUILogger()
+            cp.guilogger.move(self.pos().__add__(QtCore.QPoint(self.size().width()+10,0))) # open window with offset w.r.t. parent
+            cp.guilogger.show()
+            logger.info('Logger GUI window is open',  self.name )
+
+
+    def on_but_help(self):
+        msg = str(self.help_msg)
+        if  cp.guihelp is None :
+            cp.guihelp = help_dialog_box(self, text=msg)
+        else :
+            cp.guihelp.close()
+            #del cp.guihelp
+            cp.guihelp = None
+
+        #logger.info('Help message:' + msg, self.name )
+        #print msg
+
+
+    def help_message(self):
+        msg  = '\n' + '='*60
+        msg += '\nMouse control functions in graphical window:'
+        msg += '\nZoom-in image: left/right mouse button click, move, and release in another image position.'
+        msg += '\nUndo:          middle mouse button click on image - undo up to 10 latest zoom-ins.'
+        msg += '\n"Clear" button - clears the image.'
+        return msg
+
+
+    def setStatus(self, ind=None, msg='') :
+        #if   self.stat_ind == 0 : self.lab_status.setStyleSheet(cp.styleButtonGood) # cp.styleStatusGood)
+        #elif self.stat_ind == 1 : self.lab_status.setStyleSheet(cp.styleButtonWarning) # cp.styleStatusWarning)
+        #elif self.stat_ind == 2 : self.lab_status.setStyleSheet(cp.styleButtonBad) # cp.styleStatusAlarm)
+        self.lab_status.setText(str(msg))
+
+    def enforceStatusRepaint(self) :
+        self.lab_status.repaint()
+        self.repaint()
+
+#-----------------------------
+
+def test_GUIGrabSubmitELog() :
+    app = QtGui.QApplication(sys.argv)
+    widget = GUIGrabSubmitELog ()
+    widget.show()
+    app.exec_()
+
+#-----------------------------
+
+def check_pwd(opts, args):
+    if opts.pas is not None : return 
+    suffix = opts.url.rsplit('-',1)[-1] # splits 'auth', 'pam', or 'kerb'
+    if suffix == 'kerb'     : return
+
+    msg = 'To use %s and submitt messages in ELog' % os.path.basename(sys.argv[0])\
+         +'\nauthentication of user "%s" is required.\n\nPassword:' % opts.usr
+    text, ok = QtGui.QInputDialog().getText(None, 'Authentication', msg, QtGui.QLineEdit.Password)
+    #print 'Dialog results: %s %s' % (text, ok)
+
+    if ok :
+        opts.pas = text
+    else  :
+        msg = 'Sorry, %s can not proceed without user "%s" authentication.' % \
+              (os.path.basename(sys.argv[0]), opts.usr)       
+        sys.exit(msg)
+
+#-----------------------------
+
+def check_input_pars(opts, args):
+    #print 'opts:\n', opts
+    #print 'args:\n', args
+    if opts.usr is None :
+        import getpass
+        uname = getpass.getuser()
+        print 'WARNING: User name is not specified. By default will use login name "%s".' % (uname)
+        opts.usr = uname
+
+    check_pwd(opts, args)
+
+#-----------------------------
+
+from optparse import OptionParser
+
+def input_options_parser() :
+
+    msg_usg  = '  %prog [options] args\n'\
+             + 'Example for usr: %prog -i AMO:0 -e amodaq14 -u <login-name> # password will be requested for authentication\n'\
+             + 'Example for opr: %prog -i AMO:0 -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth'
+    #         + 'Example: /reg/g/pcds/pds/grabber/bin/%prog -i AMO:0 -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth'
+    
+    url_lst = ('https://pswww.slac.stanford.edu/ws-auth',
+               'https://pswww.slac.stanford.edu/ws-pam',
+               'https://pswww.slac.stanford.edu/ws-kerb')
+    url_str = '\n'.join(url_lst) 
+    url_def = url_lst[1]
+    
+    msg_descrip  = '%prog - grabs any selected window on terminal or its part and submits it with message to ELog'
+    
+    parser = OptionParser(description=msg_descrip, usage=msg_usg)
+    parser.add_option('-i', '--ins', dest='inssta', default=None,   action='store', type='string', help='the name of an instrument and station <INS>[:<station-number>]')
+    parser.add_option('-e', '--exp', dest='exp',    default=None,   action='store', type='string', help='the name of experiment')
+    parser.add_option('-w', '--url', dest='url',    default=url_def,action='store', type='string', help='the base URL of LogBook web service, default = %s of the list:\n%s' % (url_def,url_str))
+    parser.add_option('-c', '--cmd', dest='cmd',    default=None,   action='store', type='string', help='the command for child message - result of this command is attached to the message')
+    parser.add_option('-f', '--cfg', dest='cfname', default=None,   action='store', type='string', help='the file name with configuration parameters (by default is not used)')
+    parser.add_option('-u', '--usr', dest='usr',    default=None,   action='store', type='string', help='the user name to connect to the web service')
+    parser.add_option('-p', '--pas', dest='pas',    default=None,   action='store', type='string', help='the password to connect to the web service (by default is used for opr accounts)')
+    #parser.add_option('-v', '--verbose',      dest='verb',    default=True, action='store_true',           help='allows print on console')
+    #parser.add_option('-q', '--quiet',        dest='verb',                  action='store_false',          help='supress print on console')
+
+    (opts, args) = parser.parse_args()
+    return (opts, args)
+
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+#---------------------------------
+# python /reg/g/pcds/pds/grabber/bin/grelog.py -i AMO -e amodaq14 -u amoopr -p <password> -w https://pswww.slac.stanford.edu/ws-auth
+# grelog.py -i AMO -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth
+#---------------------------------
+from LogBookClient.LogBookWebService import LogBookWebService
+
+def run_GUIGrabSubmitELog() :
+
+    (opts, args) = input_options_parser()
+    #print 'opts:\n', opts
+    #print 'args:\n', args
+
+    #-----------------------------
+    print 'File name for I/O configuration parameters:', str(opts.cfname)
+
+    sta = ''
+    pos = opts.inssta.rfind(':')
+    if pos==-1 : ins = opts.inssta
+    else :
+        ins = opts.inssta[:pos]
+        if len(opts.inssta[pos:]) > 1 : sta = opts.inssta[pos+1:]
+
+    #-----------------------------
+
+    app = QtGui.QApplication(sys.argv)
+
+    check_input_pars(opts, args)
+
+    #-----------------------------
+    pars = { 'ins'    : ins, 
+             'sta'    : sta, 
+             'exp'    : opts.exp, 
+             'url'    : opts.url, 
+             'usr'    : opts.usr, 
+             'pas'    : opts.pas,
+             'cmd'    : opts.cmd
+           }
+
+    print 'Start grabber for ELog with input parameters:'
+    for k,v in pars.items():
+        if k is not 'pas' : print '%9s : %s' % (k,v)
+
+    lbws = LogBookWebService(**pars)
+    #lbws.print_experiments()
+
+    #-----------------------------
+    pars2 ={ 'ins'    : 'NEH', 
+             'sta'    : sta, 
+             'exp'    : ins + ' Instrument', 
+             'url'    : opts.url, 
+             'usr'    : opts.usr, 
+             'pas'    : opts.pas,
+             'cmd'    : opts.cmd
+           }
+
+    print 'Open web service for copy messages in the instrumental ELog:'
+    for k,v in pars2.items():
+        if k is not 'pas' : print '%9s : %s' % (k,v)
+
+    lbws2 = LogBookWebService(**pars2)
+    #lbws2.print_experiments()
+
+    #-----------------------------
+    #app = QtGui.QApplication(sys.argv)
+    #w  = GUIGrabSubmitELog.py(**pars)
+    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=lbws2)
+    w.show()
+    app.exec_()
+
+    #del QtGui.qApp
+    #QtGui.qApp=None
+
+    #app.closeAllWindows()
+    #QtGui.qApp=None
+    print 'Exit application...'
+    
+#-----------------------------
+#-----------------------------
+#-----------------------------
+#-----------------------------
+
+if __name__ == "__main__" :
+
+    if len(sys.argv)==1 :
+        sys.argv.append('-h')
+        run_GUIGrabSubmitELog()
+
+    elif len(sys.argv)==2 or len(sys.argv)==3 :
+
+        if   sys.argv[1] == '-h': run_GUIGrabSubmitELog()
+        elif sys.argv[1] == '1' : test_Logger()
+        elif sys.argv[1] == '2' : test_ConfigParametersForApp()
+        elif sys.argv[1] == '3' : test_GUILogger() 
+        elif sys.argv[1] == '4' : test_GUIImage()
+        elif sys.argv[1] == '5' : test_NotificationDBInc()
+        else : print 'Non-recognized argument: %s' % sys.argv[1]
+
+    else :
+        run_GUIGrabSubmitELog()
+
+    sys.exit ('End of %s' % sys.argv[0])
+
+    #try: sys.exit (0)
+    #except SystemExit as err :
+    #    print 'Xo-xo'
+
+#-----------------------------
+#-----------------------------
