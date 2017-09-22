@@ -36,7 +36,7 @@ import socket
 import stat
 import tempfile
 from urlparse import urlparse
-
+import getpass
 
 #import tkMessageBox
 #from Tkinter import *
@@ -45,7 +45,6 @@ from urlparse import urlparse
 import requests
 from requests.auth import HTTPBasicAuth
 
-from kerbticket import KerberosTicket
  
 #----------------------------------
 
@@ -56,6 +55,7 @@ def __get_auth_params(ws_url=None, user=None, passwd=None):
     if passwd:
         authParams['auth']=HTTPBasicAuth(user, passwd)
     else:
+        from kerbticket import KerberosTicket
         if suffix == 'kerb':
             authParams['headers']=KerberosTicket("HTTP@" + urlparse(ws_url).hostname).getAuthHeaders()
     return authParams
@@ -168,6 +168,10 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
 
     params = {}
     params['author_account']  = usr
+    suffix = ws_url.rsplit('-',1)[-1]
+    if suffix == 'kerb':
+        params['author_account']  = getpass.getuser()
+
     params['id']              = exper_id
     params['message_text']    =  msg
     params['text4child']      = child_output
