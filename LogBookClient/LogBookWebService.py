@@ -35,6 +35,8 @@ import simplejson
 import socket
 import stat
 import tempfile
+from urlparse import urlparse
+
 
 #import tkMessageBox
 #from Tkinter import *
@@ -42,8 +44,22 @@ import tempfile
 
 import requests
 from requests.auth import HTTPBasicAuth
+
+from kerbticket import KerberosTicket
  
 #----------------------------------
+
+
+def __get_auth_params(ws_url=None, user=None, passwd=None):
+    suffix = ws_url.rsplit('-',1)[-1]
+    authParams = {}
+    if passwd:
+        authParams['auth']=HTTPBasicAuth(user, passwd)
+    else:
+        if suffix == 'kerb':
+            authParams['headers']=KerberosTicket("HTTP@" + urlparse(ws_url).hostname).getAuthHeaders()
+    return authParams
+
 
 def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None, passwd=None):
 
@@ -54,10 +70,10 @@ def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None
 
     try:
         d = dict()
-
+        authParams = __get_auth_params(ws_url, user, passwd) 
+        
         for url in urls:
-
-            result = requests.get(url, auth=HTTPBasicAuth(user, passwd)).json()
+            result = requests.get(url, **authParams).json()
             
             if len(result) <= 0:
                 print "ERROR: no experiments are registered for instrument: %s" % instrument
@@ -87,8 +103,10 @@ def ws_get_current_experiment (instrument, station, ws_url, user, passwd):
     url = ws_url+'/LogBook/RequestCurrentExperiment.php?instr='+instrument
     if station != '' : url += '&station='+station
 
+    authParams = __get_auth_params(ws_url, user, passwd) 
+
     try:
-        result   = requests.get(url, auth=HTTPBasicAuth(user, passwd)).json()
+        result   = requests.get(url, **authParams).json()
         if len(result) <= 0:
             print "ERROR: no experiments are registered for instrument:station %s:%s" % (instrument,station)
 
@@ -110,8 +128,11 @@ def ws_get_tags (id, ws_url, user, passwd):
 
     url = ws_url+'/LogBook/RequestUsedTagsAndAuthors.php?id='+id;
 
+    authParams = __get_auth_params(ws_url, user, passwd) 
+
+
     try:
-        result = requests.get(url, auth=HTTPBasicAuth(user, passwd)).json()
+        result = requests.get(url, **authParams).json()
         if result['Status'] != 'success':
             print "ERROR: failed to obtain tags for experiment id=%d because of:" % id,result['Message']
             sys.exit(1)
@@ -188,9 +209,10 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
 
 
     try:
+        authParams = __get_auth_params(ws_url, usr, passwd) 
 
         #print 'Try to submit message: \nurl: ', url, '\ndatagen:', datagen, '\nheaders:' , headers
-        post_result = requests.post(url, data=params, files=files, auth=HTTPBasicAuth(usr, passwd))
+        post_result = requests.post(url, data=params, files=files, **authParams)
         #print "Result of post is", post_result.text
         result = post_result.json()
 
