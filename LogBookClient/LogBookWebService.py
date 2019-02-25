@@ -4,7 +4,7 @@
 #------------------------------------------------------------------------
 """Web service for LogBookGrabber_qt.py
 
-This software was developed for the SIT project.  If you use all or 
+This software was developed for the SIT project.  If you use all or
 part of it, please give an appropriate acknowledgment.
 
 @see LogBookGrabber_qt.py
@@ -27,15 +27,14 @@ import os
 #import os
 import os.path
 
-import httplib
-import mimetools
+import http.client
 import mimetypes
 import pwd
 import simplejson
 import socket
 import stat
 import tempfile
-from urlparse import urlparse
+from urllib.parse import urlparse
 import getpass
 
 #import tkMessageBox
@@ -45,7 +44,7 @@ import getpass
 import requests
 from requests.auth import HTTPBasicAuth
 
- 
+
 #----------------------------------
 
 
@@ -55,7 +54,7 @@ def __get_auth_params(ws_url=None, user=None, passwd=None):
     if passwd:
         authParams['auth']=HTTPBasicAuth(user, passwd)
     else:
-        from kerbticket import KerberosTicket
+        from .kerbticket import KerberosTicket
         if suffix == 'kerb':
             authParams['headers']=KerberosTicket("HTTP@" + urlparse(ws_url).hostname).getAuthHeaders()
     return authParams
@@ -65,158 +64,117 @@ def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None
 
     # Try both experiments (at instruments) and facilities (at locations)
     #
-    urls = [ ws_url+'/LogBook/RequestExperimentsNew.php?instr='+instrument+'&access=post',
-             ws_url+'/LogBook/RequestExperimentsNew.php?instr='+instrument+'&access=post&is_location' ]
+    urls = [ ws_url+'/lgbk/ws/postable_experiments' ]
 
     try:
         d = dict()
-        authParams = __get_auth_params(ws_url, user, passwd) 
-        
+        authParams = __get_auth_params(ws_url, user, passwd)
+
         for url in urls:
             result = requests.get(url, **authParams).json()
-            
+
             if len(result) <= 0:
-                print "ERROR: no experiments are registered for instrument: %s" % instrument
+                print("ERROR: no experiments are registered for instrument: %s" % instrument)
 
             # if the experiment was explicitly requested in the command line then try to find
             # the one. Otherwise return the whole list
             #
             if experiment is not None:
-                for e in result['ResultSet']['Result']:
+                for e in result['value']:
                     if experiment == e['name']:
                         d[experiment] = e
-                        d[experiment]['tags'] = ws_get_tags(e['id'], ws_url, user, passwd)
             else:
-                for e in result['ResultSet']['Result']:
-                    d[e['name']] = e
-                    d[e['name']] = ws_get_tags(e['id'], ws_url, user, passwd)
+                for e in result['value']:
+                    if e['instrument'] in [ instrument, 'NEH' ]:
+                        d[e['name']] = e
         return d
 
     except requests.exceptions.RequestException as e:
-        print "ERROR: failed to get a list of experiment from Web Service due to: ", e
+        print("ERROR: failed to get a list of experiment from Web Service due to: ", e)
         sys.exit(1)
 
 #----------------------------------
 
 def ws_get_current_experiment (instrument, station, ws_url, user, passwd):
 
-    url = ws_url+'/LogBook/RequestCurrentExperiment.php?instr='+instrument
-    if station != '' : url += '&station='+station
+    url = ws_url+'/lgbk/ws/activeexperiments'
 
-    authParams = __get_auth_params(ws_url, user, passwd) 
+    authParams = __get_auth_params(ws_url, user, passwd)
+    print("Looking for current experiment on instrument {} station {}".format(instrument, station))
 
     try:
-        result   = requests.get(url, **authParams).json()
-        if len(result) <= 0:
-            print "ERROR: no experiments are registered for instrument:station %s:%s" % (instrument,station)
+        result = requests.get(url, **authParams).json()
+        for e in result['value']:
+            if e['instrument'] == instrument:
+                if station:
+                    if str(station) == str(e["station"]):
+                        return e['name']
+                else:
+                    return e['name']
 
-        #print 'result:', result 
-        e = result['ResultSet']['Result']
-        if e is not None:
-            return e['name']
-
-        print "ERROR: no current experiment configured for this instrument:station %s:%s" % (instrument,station)
+        print("ERROR: no current experiment configured for this instrument:station %s:%s" % (instrument,station))
         sys.exit(1)
 
     except requests.exceptions.RequestException as e:
-        print "ERROR: failed to get the current experiment info from Web Service due to: ", e
+        print("ERROR: failed to get the current experiment info from Web Service due to: ", e)
         sys.exit(1)
 
 #----------------------------------
 
-def ws_get_tags (id, ws_url, user, passwd):
+def ws_get_tags (expname, ws_url, user, passwd):
 
-    url = ws_url+'/LogBook/RequestUsedTagsAndAuthors.php?id='+id;
+    url = ws_url+'/lgbk/' + expname + '/ws/get_elog_tags';
 
-    authParams = __get_auth_params(ws_url, user, passwd) 
+    authParams = __get_auth_params(ws_url, user, passwd)
 
 
     try:
         result = requests.get(url, **authParams).json()
-        if result['Status'] != 'success':
-            print "ERROR: failed to obtain tags for experiment id=%d because of:" % id,result['Message']
-            sys.exit(1)
-
-        #print 'Tags:', result['Tags']
-        return result['Tags']
+        return result['value']
 
     except requests.exceptions.RequestException as e:
-        print "ERROR: failed to get the current experiment info from Web Service due to: ", e
+        print("ERROR: failed to get the current experiment info from Web Service due to: ", e)
 
 #----------------------------------
 #(inst='AMO', exp='amodaq14', run='825', tag='TAG1',
 # msg='EMPTY MESSAGE', fname=None, fname_att=None, resp=None) :
 
-def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=[''], run='', msg_id='', msg='', lst_descr=[''], lst_fname=['']):
+def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=None, run_num='', msg_id='', msg='', lst_fname=[''], emails=None):
 
-    exper_id = logbook_experiments[exp]['id']
-
-    url = ws_url+'/LogBook/NewFFEntry4grabberJSON.php'
-
-    child_output = ''
-    if cmd is not None: child_output = os.popen(cmd).read()
-
-    if (run != '') and (msg_id != '') :
-        print 'run', run
-        print 'message_id', msg_id
+    exper_name = logbook_experiments[exp]['name']
+    if (run_num != '') and (msg_id != '') :
+        print('run', run)
+        print('message_id', msg_id)
 
         msg = "\nInconsistent input:" \
             + "\nRun number can't be used togher with the parent message ID." \
-            + "\nChoose the right context to post the screenshot and try again." 
-        print msg
+            + "\nChoose the right context to post the screenshot and try again."
+        print(msg)
         return
 
-    params = {}
-    params['author_account']  = usr
-    suffix = ws_url.rsplit('-',1)[-1]
-    if suffix == 'kerb':
-        params['author_account']  = getpass.getuser()
 
-    params['id']              = exper_id
-    params['message_text']    =  msg
-    params['text4child']      = child_output
-    #params['instrument']      = ins
-    #params['experiment']      = exp
+    serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
+    payload = { 'log_text': msg }
+    if run_num != '':
+        payload['run_num'] = run_num
+    if emails and emails != '':
+        payload['log_emails'] = emails
+    if msg_id and msg_id != '':
+        payload['parent'] = msg_id
+    if lst_tag and lst_tag[0] != '':
+        payload['log_tags'] = " ".join(lst_tag)
 
-    if run != '' :
-        params['scope']   = 'run'
-        params['run_num'] = run
-
-    elif msg_id != '' : 
-        params['scope']      = 'message'
-        params['message_id'] = msg_id
-
-    else:
-        params['scope'] =  'experiment'
-
-    if lst_tag !=[''] :
-        params['num_tags'] = str(len(lst_tag))
-        for i,tag in enumerate(lst_tag) :
-            s = '%d' % (i)
-            params['tag_name_'  + s] = tag
-            params['tag_value_' + s]  = ''
-
-    files = {}
+    files = []
     if lst_fname != [''] :
-        for i,(fname, descr) in enumerate( zip(lst_fname, lst_descr) ) :
-            s = '%d' % (i+1)
-            #params.append(MultipartParam.from_file('file' + s, fname))
-            files['file' + s]  =  open(fname, 'rb')
-            params['file' + s] = descr
-
-#!!!!!!!!!!!!!!!!!!!!!!!
-#    print 'params:', params
-#    return {'status': 'error', 'message': 'Bad Error message'}
-#    return {'status': 'success', 'message_id': '123456'}
-#!!!!!!!!!!!!!!!!!!!!!!!
-    
-
+        files = [("files",  (os.path.basename(fname), open(fname, 'rb'), mimetypes.guess_type(fname)[0])) for fname in lst_fname ]
+        print(files)
 
     try:
-        authParams = __get_auth_params(ws_url, usr, passwd) 
+        authParams = __get_auth_params(ws_url, usr, passwd)
 
         #print 'Try to submit message: \nurl: ', url, '\ndatagen:', datagen, '\nheaders:' , headers
-        post_result = requests.post(url, data=params, files=files, **authParams)
+        post_result = requests.post(serverURL, data=payload, files=files, **authParams)
+        post_result.raise_for_status()
         #print "Result of post is", post_result.text
         result = post_result.json()
 
@@ -224,15 +182,16 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
         #NORMAL: result: {'status': 'success', 'message_id': '125263'}
         #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
 
-        if result['status'] == 'success':
-            print 'New message ID:', result['message_id']
+        if result['success']:
+            print('Server response %s' % result )
         #else :
         #    print 'Error:', result['message']
 
         return result
 
     except requests.exceptions.RequestException as e:
-        print "ERROR: failed to get the current experiment info from Web Service due to: ", e
+        print("ERROR: failed to generate a new elog entry due to: ", e)
+        return {"success": False, "message": str(e)}
 
 #----------------------------------
 #----------------------------------
@@ -250,21 +209,23 @@ class LogBookWebService :
         self.usr = usr
         self.pas = pas
         self.cmd = cmd
-        
+
         if self.ins is None:
-            print "No instrument name found among command line parameters"
+            print("No instrument name found among command line parameters")
             sys.exit(3)
 
         if self.url is None:
-            print "No web service URL found among command line parameters"
+            print("No web service URL found among command line parameters")
             sys.exit(3)
 
         if self.usr is None:
             self.usr = pwd.getpwuid(os.geteuid())[0]
-            print "User login name is not found among command line parameters" +\
-                  "\nTry to gess that the user name is " + self.usr
+            print("User login name is not found among command line parameters" +\
+                  "\nTry to gess that the user name is " + self.usr)
 
         self.set_experiment(exp)
+
+        mimetypes.init()
 
 
 
@@ -282,7 +243,7 @@ class LogBookWebService :
             else :
                 self.exp = exp
 
-        print 'Set experiment:', self.exp
+        print('Set experiment:', self.exp)
 
         # ------------------------------------------------------
         # Get a list of experiments for the specified instrument
@@ -295,13 +256,11 @@ class LogBookWebService :
 
     def get_list_of_tags(self) :
 
-        if self.logbook_experiments == {} :
-            print '\nWARNING! ws_get_experiments(exp,ins,url) '\
-                  'returns empty dictionary for\nexp: %s\nins: %s\nurl: %s' % (self.exp, self.ins, self.url)
 
-        try : list_raw = self.logbook_experiments[self.exp]['tags']
-        except KeyError, reason:
-            print '\nWARNING! List of tags is not found for exp %s due to: %s' % (self.exp, reason)
+
+        try : list_raw = ws_get_tags(self.exp, self.url, self.usr, self.pas)
+        except Exception as reason:
+            print('\nWARNING! List of tags is not found for exp %s due to: %s' % (self.exp, reason))
             return []
 
         list_str = []
@@ -312,23 +271,23 @@ class LogBookWebService :
 
     def get_list_of_experiments(self) :
         d = ws_get_experiments (None, self.ins, self.url, self.usr, self.pas)
-        return d.keys()
+        return list(d.keys())
 
 
     def get_current_experiment(self) :
         return ws_get_current_experiment (self.ins, self.sta, self.url, self.usr, self.pas)
 
 
-    def post(self, msg='', run='', res='', tag='', des='', att='') :
+    def post(self, msg='', run='', res='', tag='', att='') :
         result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \
-                                    msg=msg, run=run, msg_id=res, lst_tag=[tag], lst_descr=[des], lst_fname=[att])
+                                    msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att])
         return  result
         #NORMAL: result: {'status': 'success', 'message_id': '125263'}
         #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
 
-    def post_lists(self, msg='', run='', res='', lst_tag=[''], lst_des=[''], lst_att=['']) :
+    def post_lists(self, msg='', run='', res='', lst_tag=[''], lst_att=['']) :
         result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \
-                                    msg=msg, run=run, msg_id=res, lst_tag=lst_tag, lst_descr=lst_des, lst_fname=lst_att)
+                                    msg=msg, run_num=run, msg_id=res, lst_tag=lst_tag, lst_fname=lst_att)
         return result
 
 
@@ -339,43 +298,43 @@ class LogBookWebService :
 #----------------------------------
 
 def test_LogBookWebService() :
-    
+
     ins = 'AMO'
     sta = '0'
     exp = 'amodaq14'
     usr = 'amoopr'
     url = 'https://pswww-dev.slac.stanford.edu/ws-auth'
-    pas = 'password'                                    
-    cmd = ''                                    
-    
+    pas = 'password'
+    cmd = ''
+
     pars = {
-            'ins' : ins, 
-            'sta' : sta, 
-            'exp' : exp, 
-            'url' : url, 
-            'usr' : usr, 
+            'ins' : ins,
+            'sta' : sta,
+            'exp' : exp,
+            'url' : url,
+            'usr' : usr,
             'pas' : pas,
             'cmd' : cmd
             }
 
-    print 50*'='+'\nStart grabber for ELog with input parameters:'
-    for k,v in pars.items():
-        print '%9s : %s' % (k,v)
+    print(50*'='+'\nStart grabber for ELog with input parameters:')
+    for k,v in list(pars.items()):
+        print('%9s : %s' % (k,v))
 
-    print 50*'='+'\nTest LogBookWebService(**pars) methods:\n'
+    print(50*'='+'\nTest LogBookWebService(**pars) methods:\n')
 
     lbws = LogBookWebService(**pars)
-    print '\nTest lbws.logbook_experiments:\n',     lbws.logbook_experiments
-    print '\nTest lbws.get_list_of_experiments():', lbws.get_list_of_experiments()
-    print '\nselflbws.get_list_of_tags():',         lbws.get_list_of_tags()
+    print('\nTest lbws.logbook_experiments:\n',     lbws.logbook_experiments)
+    print('\nTest lbws.get_list_of_experiments():', lbws.get_list_of_experiments())
+    print('\nselflbws.get_list_of_tags():',         lbws.get_list_of_tags())
 
-    print 50*'='+'\nTest global WebService methods:'
-    print '\nTest ws_get_experiments(exp, ins, url):\n', ws_get_experiments (experiment=None, instrument=ins, ws_url=url, user=usr, passwd=pas)
-    print '\nTest ws_get_current_experiment(ins, sta, url): ', ws_get_current_experiment (ins, sta, url, usr, pas)
+    print(50*'='+'\nTest global WebService methods:')
+    print('\nTest ws_get_experiments(exp, ins, url):\n', ws_get_experiments (experiment=None, instrument=ins, ws_url=url, user=usr, passwd=pas))
+    print('\nTest ws_get_current_experiment(ins, sta, url): ', ws_get_current_experiment (ins, sta, url, usr, pas))
     #print '\nTest ws_get_tags(id, url):\n', ws_get_tags ('409', url)
 
-    print 50*'='+'\nSuccess!'
-    
+    print(50*'='+'\nSuccess!')
+
     sys.exit('End of test_LogBookWebService.')
 
 
