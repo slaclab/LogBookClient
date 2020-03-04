@@ -26,11 +26,12 @@ import os
 #import sys
 #import os
 import os.path
+import logging
 
 import http.client
 import mimetypes
 import pwd
-import simplejson
+import json
 import socket
 import stat
 import tempfile
@@ -44,6 +45,8 @@ import getpass
 import requests
 from requests.auth import HTTPBasicAuth
 
+plogger = logging.getLogger(__name__)
+
 
 #----------------------------------
 
@@ -55,7 +58,8 @@ def __get_auth_params(ws_url=None, user=None, passwd=None):
         authParams['auth']=HTTPBasicAuth(user, passwd)
     else:
         from .kerbticket import KerberosTicket
-        if suffix == 'kerb':
+        if 'kerb' in suffix:
+            print("Using Kerberos")
             authParams['headers']=KerberosTicket("HTTP@" + urlparse(ws_url).hostname).getAuthHeaders()
     return authParams
 
@@ -105,7 +109,7 @@ def ws_get_current_experiment (instrument, station, ws_url, user, passwd):
     try:
         result = requests.get(url, **authParams).json()
         for e in result['value']:
-            if e['instrument'] == instrument:
+            if e.get('instrument', None) == instrument:
                 if station:
                     if str(station) == str(e["station"]):
                         return e['name']
@@ -121,9 +125,23 @@ def ws_get_current_experiment (instrument, station, ws_url, user, passwd):
 
 #----------------------------------
 
+def ws_get_current_run(ws_url, user, passwd, experiment_name):
+    plogger.debug("Looking for current run for experiment %s", experiment_name)
+    url = ws_url+'/lgbk/{}/ws/current_run'.format(experiment_name)
+    authParams = __get_auth_params(ws_url, user, passwd)
+    try:
+        result = requests.get(url, **authParams).json()
+        if not result.get("success", False):
+            plogger.warning("Experiment %s does not have a current run", experiment_name)
+            return None
+        return result.get("value", {})["num"]
+    except:
+        plogger.exception("ERROR: failed to get the current run for experiment %s", experiment_name)
+        return None
+
 def ws_get_tags (expname, ws_url, user, passwd):
 
-    url = ws_url+'/lgbk/' + expname + '/ws/get_elog_tags';
+    url = ws_url+'/lgbk/' + expname.replace(" ", "_") + '/ws/get_elog_tags';
 
     authParams = __get_auth_params(ws_url, user, passwd)
 
@@ -141,18 +159,7 @@ def ws_get_tags (expname, ws_url, user, passwd):
 
 def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=None, run_num='', msg_id='', msg='', lst_fname=[''], emails=None):
 
-    exper_name = logbook_experiments[exp]['name']
-    if (run_num != '') and (msg_id != '') :
-        print('run', run)
-        print('message_id', msg_id)
-
-        msg = "\nInconsistent input:" \
-            + "\nRun number can't be used togher with the parent message ID." \
-            + "\nChoose the right context to post the screenshot and try again."
-        print(msg)
-        return
-
-
+    exper_name = exp.replace(" ", "_")
     serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
     payload = { 'log_text': msg }
     if run_num != '':
@@ -242,6 +249,8 @@ class LogBookWebService :
                 self.exp = ws_get_current_experiment (self.ins, self.sta, self.url, self.usr, self.pas)
             else :
                 self.exp = exp
+        else:
+            self.exp = ws_get_current_experiment (self.ins, self.sta, self.url, self.usr, self.pas)
 
         print('Set experiment:', self.exp)
 
@@ -253,6 +262,8 @@ class LogBookWebService :
 
         self.logbook_experiments = ws_get_experiments (self.exp, self.ins, self.url, self.usr, self.pas)
 
+    def get_experiment(self):
+        return self.exp
 
     def get_list_of_tags(self) :
 
@@ -277,6 +288,8 @@ class LogBookWebService :
     def get_current_experiment(self) :
         return ws_get_current_experiment (self.ins, self.sta, self.url, self.usr, self.pas)
 
+    def get_current_run(self) :
+        return ws_get_current_run(self.url, self.usr, self.pas, self.exp)
 
     def post(self, msg='', run='', res='', tag='', att='') :
         result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \

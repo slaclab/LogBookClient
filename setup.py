@@ -13,15 +13,15 @@ setup(
         'Intended Audience :: SLAC PCDS ',
         'Topic :: Utilities',
         'License :: EPICS License',
-        'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 3'
     ],
-    install_requires=[ 
+    install_requires=[
         'requests',
         'simplejson',
         'MySQL-python',
-        'six', 
+        'six',
     ],
+    include_package_data=True,
     scripts=['LogBookClient/LogBookGrabber_qt'],
     packages=find_packages()
 )

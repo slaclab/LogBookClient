@@ -21,23 +21,28 @@ __version__ = "V2015-05-15"
 #--------------------------------
 #  Imports of standard modules --
 #--------------------------------
-import sys
 import os
+import logging
 import pwd
 import tempfile
+import sys
+import re
 from copy import deepcopy
-from time import time, localtime, strftime
+from time import time, localtime, strftime, sleep
+
+from datetime import datetime, timedelta
 
 from PyQt5 import QtGui, QtCore, QtWidgets
-from time import sleep
+
+from LogBookClient.LogBookWebService import LogBookWebService
+from LogBookClient.TagCompleter import TagCompleter
+from LogBookClient.MsgTextEdit import MsgTextEdit
 
 __author__ = "Mikhail S. Dubrovin"
 
-#import time   # for sleep(sec)
 
-#-----------------------------
-# Imports for other modules --
-#-----------------------------
+logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
+plogger = logging.getLogger(__name__)
 
 class Logger :
     """Is intended as a log-book keeper.
@@ -1104,6 +1109,15 @@ class GUIImage ( QtWidgets.QLabel ) :
             self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
             self.setPixmapForImage()
 
+    def grabFullScreen(self):
+        #self.setMinimumSize(150, 150)
+        #fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.ppm')
+        fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
+        #print fname.name
+        #logger.info('Use temporary file: %s' % (fname.name), self.name)
+        if( 0 == os.system('import -trim -frame -border -window root %s' % (fname.name))) :
+            self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+            self.setPixmapForImage()
 
     def grabEntireWindow(self):
         self.r_pixmap = QtGui.QPixmap.grabWindow(QtGui.QApplication.desktop().winId())
@@ -1415,7 +1429,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     ins = LocalParameter ()
     in2 = LocalParameter ()
     exp = LocalParameter ()
-    ex2 = LocalParameter ()
     run = LocalParameter ()
     tag = LocalParameter ()
     res = LocalParameter ()
@@ -1456,112 +1469,85 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             self.list_of_exps = self.lbws.get_list_of_experiments()
             self.exp_ind_in_list = self.list_of_exps.index(self.exp.value()) if (self.exp.value() in self.list_of_exps) else 0
 
+        self.tag_timeouts = [ 2, 5, 10, 20, 30]
+        self.tag_timeout_index = 2
+
         #-------------------------------------------------------
 
         self.wimg = GUIImage(self)
-
-        self.cbx_copy = QtWidgets.QCheckBox('Copy to ins. ELog', self)
-        self.cbx_copy.setChecked(False)
-        # Temporarily disable the post to instrument elog checkbox until we have server side support.
-        self.cbx_copy.setEnabled(False)
-
-        #self.cbx_more = QtWidgets.QCheckBox('More options', self)
-        #self.cbx_more.setChecked( cp.cbx_more_options.value() )
-
-        self.box_tag = QtWidgets.QComboBox( self )
-        self.box_tag.addItems(self.list_of_tags())
-        self.box_tag.setCurrentIndex(0) # self.list_of_tags.index(cp.elog_post_tag.value()))
 
         self.box_exp = QtWidgets.QComboBox( self )
         self.box_exp.addItems(self.list_of_exps)
         self.box_exp.setCurrentIndex(self.exp_ind_in_list)
 
-        self.lab_status   = QtWidgets.QLabel('Last submitted msg id: ' + self.res.value())
-        #self.lab_status  = QtWidgets.QLineEdit('Last submitted message ID: ' + self.res.value())
-        #self.lab_status  = QtWidgets.QPushButton('Last submitted message ID: ' + self.res.value())
-
         self.but_grab     = QtWidgets.QPushButton('&Grab')
-        self.but_load     = QtWidgets.QPushButton('&Load')
-        self.but_reset    = QtWidgets.QPushButton('&Clear')
+        self.but_load     = QtWidgets.QPushButton('&Load File')
+        self.but_reset    = QtWidgets.QPushButton('&Clear Msg')
+        self.but_fsgrab   = QtWidgets.QPushButton('&Full screen grab')
         self.but_save     = QtWidgets.QPushButton('Save img')
-        self.but_update   = QtWidgets.QPushButton('Set current exp')
-        self.but_elog     = QtWidgets.QPushButton('&Submit') #u'\u2192 &ELog'
+        self.but_currexp  = QtWidgets.QPushButton()
+        self.but_currexp.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "refresh.svg"))))
+        self.but_currexp.setObjectName("setcurexp")
+        self.but_elog     = QtWidgets.QPushButton('&Submit')
+        self.but_elog_ins = QtWidgets.QPushButton('&Submit (+ ins)')
         self.but_logger   = QtWidgets.QPushButton('Logger')
         self.but_help     = QtWidgets.QPushButton('&Help')
         self.but_quit     = QtWidgets.QPushButton('&Exit')
-        #self.but_save_cfg = QtWidgets.QPushButton('Save cfg')
 
         self.setHBox1Layout()
         self.setHBox2Layout()
 
-        self.lab_usr = QtWidgets.QLabel('Author:')
-        self.lab_ins = QtWidgets.QLabel('Instrument:')
         self.lab_exp = QtWidgets.QLabel('Experiment:')
-        self.lab_ex2 = QtWidgets.QLabel('Instrumental ELog:')
         self.lab_run = QtWidgets.QLabel('Run number:')
         self.lab_tag = QtWidgets.QLabel('Tag:')
-        self.lab_res = QtWidgets.QLabel('Resp. to ID:')
+        self.lab_tagtimeout = QtWidgets.QLabel('Tag timeout(in mins):')
         self.lab_msg = QtWidgets.QLabel('Message:')
-        self.lab_att = QtWidgets.QLabel('Attachement \u21B4')
 
-        self.edi_usr = QtWidgets.QLineEdit( self.usr.value() )
-        self.edi_ins = QtWidgets.QLineEdit( self.ins.value() )
+        self.box_tagtimeouts = QtWidgets.QComboBox( self )
+        self.box_tagtimeouts.addItems([str(x) for x in self.tag_timeouts])
+        self.box_tagtimeouts.setCurrentIndex(self.tag_timeout_index)
+
         #self.edi_exp = QtWidgets.QLineEdit( self.exp.value() )
-        self.edi_ex2 = QtWidgets.QLineEdit( self.ex2.value() )
         self.edi_run = QtWidgets.QLineEdit( self.run.value() )
         self.edi_tag = QtWidgets.QLineEdit( self.tag.value() )
-        self.edi_res = QtWidgets.QLineEdit( self.res.value() )
-        self.edi_msg = QtWidgets.QTextEdit( self.msg.value() )
 
-        #self.edi_res.setValidator(QtGui.QIntValidator(0,9000000,self))
+        plogger.debug("Initializing the completer")
+        self.completer = TagCompleter(self.list_of_tags())
+        self.edi_msg = MsgTextEdit( self.msg.value() )
+        self.edi_msg.setCompleter( self.completer )
 
         self.grid = QtWidgets.QGridLayout()
+        self.grid.setObjectName("GridLayout1")
         self.grid_row = 0
 
-        self.grid.addWidget(self.lab_msg,    self.grid_row+0, 0)
-        self.grid.addWidget(self.edi_msg,    self.grid_row+0, 1, 3, 5)
+        self.grid.addWidget(self.lab_tag,          self.grid_row, 0)
+        self.grid.addWidget(self.lab_tagtimeout,   self.grid_row, 5)
+        self.grid_row = self.grid_row + 1;
+        self.grid.addWidget(self.edi_tag,          self.grid_row, 0, 1, 5)
+        self.grid.addWidget(self.box_tagtimeouts,  self.grid_row, 5, 1, 1)
+        self.grid_row = self.grid_row + 1;
 
-        self.grid.addWidget(self.lab_usr,    self.grid_row+3, 0)
-        self.grid.addWidget(self.edi_usr,    self.grid_row+3, 1)
-        self.grid.addWidget(self.lab_ins,    self.grid_row+3, 2)
-        self.grid.addWidget(self.edi_ins,    self.grid_row+3, 3)
-        self.grid.addWidget(self.lab_exp,    self.grid_row+3, 4)
-        self.grid.addWidget(self.box_exp,    self.grid_row+3, 5)
+        self.grid.addWidget(self.lab_msg,    self.grid_row, 0)
+        self.grid_row = self.grid_row + 1;
+        self.grid.addWidget(self.edi_msg,    self.grid_row, 0, 5, 6)
+        self.grid_row = self.grid_row + 5;
 
-        self.grid.addWidget(self.lab_run,    self.grid_row+4, 0)
-        self.grid.addWidget(self.edi_run,    self.grid_row+4, 1, 1, 2)
-        self.grid.addWidget(self.lab_ex2,    self.grid_row+4, 2, 1, 3)
-        self.grid.addWidget(self.edi_ex2,    self.grid_row+4, 5)
-
-        self.grid.addWidget(self.lab_res,    self.grid_row+5, 0)
-        self.grid.addWidget(self.edi_res,    self.grid_row+5, 1, 1, 2)
-        self.grid.addWidget(self.lab_status, self.grid_row+5, 2, 1, 4)
-
-        self.grid.addWidget(self.lab_tag,    self.grid_row+6, 0)
-        self.grid.addWidget(self.edi_tag,    self.grid_row+6, 1)
-        self.grid.addWidget(self.box_tag,    self.grid_row+6, 2, 1, 2)
-
-        self.grid.addWidget(self.but_update, self.grid_row+6, 5)
-
-        self.grid.addWidget(self.lab_att,    self.grid_row+7, 5)
+        self.grid.addWidget(self.lab_run,     self.grid_row, 0, 1, 1)
+        self.grid.addWidget(self.edi_run,     self.grid_row, 1, 1, 1)
+        self.grid.addWidget(self.lab_exp,     self.grid_row, 3, 1, 1)
+        self.grid.addWidget(self.box_exp,     self.grid_row, 4, 1, 1)
+        self.grid.addWidget(self.but_currexp, self.grid_row, 5, 1, 1)
+        self.grid_row = self.grid_row + 1;
 
         self.hbox1_widg = QtWidgets.QWidget(self)
         self.hbox1_widg.setLayout(self.hbox1)
-        self.hbox1_widg.setFixedHeight(40)
-        self.hbox1_widg.setContentsMargins(0,-10, 0,-10)
 
         self.vbox2 = QtWidgets.QVBoxLayout()
         self.vbox2.addLayout(self.grid)
         self.vbox2_widg = QtWidgets.QWidget(self)
         self.vbox2_widg.setLayout(self.vbox2)
-        self.vbox2_widg.setFixedHeight(270)
-        self.vbox2_widg.setFixedWidth(580)
-        #self.vbox2_widg.setMinimumWidth(400)
-        self.vbox2_widg.setContentsMargins(0,-10, 0,-10)
 
         self.vbox = QtWidgets.QVBoxLayout()
-        #self.vbox.addLayout(self.hbox1)
-        #self.vbox.addLayout(self.vbox2)
         self.vbox.addWidget(self.hbox1_widg)
         self.vbox.addWidget(self.vbox2_widg)
         self.vbox.addWidget(self.wimg)
@@ -1570,44 +1556,52 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.setLayout(self.vbox)
 
         self.list_of_fields = [
-            [self.lab_usr, self.edi_usr, self.usr],
-            [self.lab_ex2, self.edi_ex2, self.ex2],
-            [self.lab_run, self.edi_run, self.run],
-            [self.lab_tag, self.edi_tag, self.tag],
-            [self.lab_res, self.edi_res, self.res],
-            [self.lab_ins, self.edi_ins, self.ins] ]
+            [self.lab_run, self.edi_run,  self.run],
+            [self.lab_tag, self.edi_tag, self.tag]
+            ]
             #[self.lab_exp, self.edi_exp, self.exp],
 
         for [lab, edi, par] in self.list_of_fields :
                 edi.editingFinished.connect(self.onEdit)
 
+        self.tag_timer = QtCore.QTimer()
+        self.tag_timer.timeout.connect(self.tag_timer_tick)
+        self.tag_timer.start(15*1000)
+
         self.edi_msg.textChanged.connect(self.onEditMessage)
+        self.edi_msg.tagCompleted.connect(self.tagCompleted)
+        self.edi_msg.firstCharacter.connect(self.firstCharacterTyped)
 
         self.but_grab.clicked.connect(self.on_but_grab)
+        self.but_fsgrab.clicked.connect(self.on_full_screen_grab)
         self.but_reset.clicked.connect(self.on_but_reset)
         self.but_load.clicked.connect(self.on_but_load)
         self.but_save.clicked.connect(self.on_but_save)
-        self.but_update.clicked.connect(self.on_but_update)
+        self.but_currexp.clicked.connect(self.on_but_currexp)
         self.but_elog.clicked.connect(self.on_but_elog)
+        self.but_elog_ins.clicked.connect(self.on_but_elog_ins)
         self.but_logger.clicked.connect(self.on_but_logger)
         self.but_help.clicked.connect(self.on_but_help)
         self.but_quit.clicked.connect(self.on_but_quit)
         #self.connect(self.but_save_cfg, QtCore.SIGNAL('clicked()'),       self.on_but_save_cfg)
 
-        self.cbx_copy.stateChanged.connect(self.on_cbx_copy)
-        self.box_tag.currentIndexChanged.connect(self.on_box_tag)
         self.box_exp.currentIndexChanged.connect(self.on_box_exp)
         #self.connect(self.cbx_more,  QtCore.SIGNAL('stateChanged(int)'),        self.on_cbx_more)
 
+        self.box_tagtimeouts.currentIndexChanged.connect(self.on_tag_timeout_change)
+
         #self.setIcons()
 
-        self.setStyle()
-        self.setFieldsReadOnlySet1()
+        # See if we can pick up the styles from the stylesheet
+        # self.setStyle()
+        # self.setFieldsReadOnlySet1()
         #self.on_cbx_more()
         self.set_but_save_visibility()
-        self.on_cbx_copy()
 
         self.setToolTips()
+
+        self.edi_msg.setFocus()
+        self.but_grab.setProperty("hintNext", True)
 
         self.notification('start')
 
@@ -1632,11 +1626,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
 
     def list_of_tags(self) :
-        lst = ['Select tag']
         if self.lbws is not None :
-            lst += self.lbws.get_list_of_tags()
-            #logger.info('List of known tags: '+str(lst), self.name )
-        return lst
+            return self.lbws.get_list_of_tags()
+        return []
 
 
 
@@ -1645,8 +1637,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.ins.setValue( self.lbws.ins )
         self.exp.setValue( self.lbws.exp )
         self.in2.setValue( self.lbws2.ins )
-        self.ex2.setValue( self.lbws2.exp )
-        self.run.setValue( 'current' )
+        self.run.setValue( '' )
         self.res.setValue( '' )
         self.msg.setValue( '' )
         self.tag.setValue( '' )
@@ -1661,28 +1652,26 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         logger.info('Set tool-tips for all fields', self.name )
 
         #self           .setToolTip('Grabber for ELog GUI')
-        self.edi_usr   .setToolTip('Sender of the message')
-        self.edi_ins   .setToolTip('Instrument')
         #self.edi_exp   .setToolTip('Experiment')
-        self.edi_ex2   .setToolTip('Effective experiment for mirror \nmessage in instrumental ELog')
-        self.edi_run   .setToolTip('Use it if posting for specific run.\n"Resp.to ID" field should be empty.\nType "current" to fetch and use the current run.')
+        self.edi_run   .setToolTip('Use it if posting for specific run\n')
         self.edi_tag   .setToolTip('Edit message tag')
-        self.edi_res   .setToolTip('Use it if replying to an existing message\n"Run number" field should be empty.')
         self.edi_msg   .setToolTip('Message for posting in ELog')
         self.but_reset .setToolTip('Clear graphical window in "Attachement"')
         self.but_grab  .setToolTip('Grab image of current monitor')
         self.but_load  .setToolTip('Load image from file')
+        self.but_fsgrab.setToolTip('Grab an image of the entire screen')
         self.but_save  .setToolTip('Save image in file')
-        self.but_update.setToolTip('Update list of active expts\nand set current')
-        self.but_elog  .setToolTip('Submit message with attachement to ELog')
+        self.but_currexp.setToolTip('Update list of active expts\nand set current')
+        self.but_elog  .setToolTip('Submit message with attachment to ELog')
+        self.but_elog_ins.setToolTip('Submit message with attachment to the experiment ELog and the instrument ELog')
         self.but_logger.setToolTip('Open/Close logger window')
         self.but_quit  .setToolTip('Save configuration parameters in file \nand exit this application. \n"x"-just exit application.')
         self.but_help  .setToolTip('Get help message \nin the logger window')
-        self.cbx_copy  .setToolTip('On/off submission of the message copy \nto the instrumental ELog. Temporarily\ndisabled until we have\nserver side support')
         #self.cbx_more  .setToolTip('Show more control buttons')
 
         self.box_exp   .setToolTip('Select experiment\n from menu')
-        self.box_tag   .setToolTip('Select tag from menu')
+        self.box_tagtimeouts.setToolTip('Set the tag timeout')
+
 
         #self.act = QtGui.QAction(self)
         #self.act.setPriority(QtGui.QAction.HighPriority)
@@ -1692,8 +1681,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     def setIcons(self) :
         cp.loadIcons()
         self.but_elog    .setIcon(cp.icon_mail_forward)
+        self.but_elog_ins.setIcon(cp.icon_mail_forward)
         self.but_load    .setIcon(cp.icon_browser) # icon_contents)
         self.but_save    .setIcon(cp.icon_save)
+        self.but_fsgrab  .setIcon(cp.icon_browser)
         self.but_grab    .setIcon(cp.icon_monitor)
         self.but_reset   .setIcon(cp.icon_reset)
         self.but_logger  .setIcon(cp.icon_contents)
@@ -1703,18 +1694,20 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     def setHBox1Layout(self):
         self.hbox1 = QtWidgets.QHBoxLayout()
+        self.hbox1.setObjectName("HBox1");
         self.hbox1.addWidget(self.but_grab)
         self.hbox1.addWidget(self.but_load)
         self.hbox1.addWidget(self.but_reset)
+        self.hbox1.addWidget(self.but_fsgrab)
         self.hbox1.addStretch(1)
-        self.hbox1.addWidget(self.cbx_copy)
+        self.hbox1.addWidget(self.but_elog_ins)
         self.hbox1.addWidget(self.but_elog)
         #self.setLayout(self.hbox1)
 
 
     def setHBox2Layout(self):
         self.hbox2 = QtWidgets.QHBoxLayout()
-        #self.hbox2.addWidget(self.cbx_more)
+        self.hbox2.setObjectName("HBox2")
         self.hbox2.addWidget(self.but_help)
         self.hbox2.addWidget(self.but_logger)
         self.hbox2.addWidget(self.but_save)
@@ -1730,7 +1723,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_quit  .setVisible(is_visible)
         #self.but_save  .setVisible(is_visible)
 
-        self.lab_att   .setVisible(is_visible)
 
 
     def setFrame(self):
@@ -1752,108 +1744,12 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
            self.setMinimumHeight(620)
            self.setMaximumHeight(2000)
         else :
-           self.setFixedHeight(320)
-           self.resize(600,320)
-
-
-    def setStyle(self):
-        #self.setMinimumWidth(400)
-        #self.setMinimumHeight(320)
-        #self.setFixedHeight(350)
-        #self.setMinimumSize(620,420)
-
-        #self.setStyleSheet(cp.styleBkgd)
-
-        width_edi_short =  40
-        width_edi       = 110
-        width_edi_exp   = 110
-        width_com       =  85
-        width_com_short =  34
-
-        self.lab_msg.setStyleSheet(cp.styleLabel)
-        self.lab_msg.setFixedWidth(width_com)
-        self.lab_att.setStyleSheet(cp.styleLabel)
-        self.lab_ins.setStyleSheet(cp.styleLabel)
-        self.lab_exp.setStyleSheet(cp.styleLabel)
-
-        for [lab, edi, par] in self.list_of_fields :
-            lab.setStyleSheet(cp.styleLabel)
-            lab.setAlignment(QtCore.Qt.AlignLeft)
-            lab.setFixedWidth(width_com)
-            edi.setFixedWidth(width_edi)
-
-        self.edi_ins.setFixedWidth(width_edi_short)
-        #self.edi_exp.setFixedWidth(width_edi_exp)
-        self.edi_ex2.setFixedWidth(width_edi_exp)
-        self.box_exp.setFixedWidth(width_edi_exp)
-
-        self.lab_ins.setAlignment(QtCore.Qt.AlignRight)
-        self.lab_exp.setAlignment(QtCore.Qt.AlignRight)
-        self.lab_ex2.setAlignment(QtCore.Qt.AlignRight)
-        #self.lab_ex2.setMinimumWidth(132)
-        self.lab_ex2.setMaximumWidth(400)
-
-        #self.edi_ins.setFixedWidth(width_edi_short)
-        #self.lab_att.setFixedWidth(width_com_short)
-        #self.lab_msg.setFixedWidth(width_com_short)
-        #self.lab_run.setFixedWidth(width_edi_short)
-        #self.edi_run.setFixedWidth(width_edi_short)
-        self.edi_msg.setMinimumWidth(400)
-        self.edi_msg.setFixedHeight(80)
-
-        #self.edi_att.setMinimumWidth(width_edi_long)
-
-        self.but_grab    .setStyleSheet (cp.styleButton)
-        self.but_reset   .setStyleSheet (cp.styleButton)
-        self.but_load    .setStyleSheet (cp.styleButton)
-        self.but_save    .setStyleSheet (cp.styleButton)
-        self.but_update  .setStyleSheet (cp.styleButton)
-        #self.but_elog    .setStyleSheet (cp.styleButton)
-        self.but_elog    .setStyleSheet (cp.styleButtonGood)
-        self.but_logger  .setStyleSheet (cp.styleButton)
-        self.but_help    .setStyleSheet (cp.styleButton)
-        #self.but_save_cfg.setStyleSheet (cp.styleButton)
-        self.but_quit    .setStyleSheet (cp.styleButtonBad)
-
-        self.cbx_copy    .setStyleSheet (cp.styleLabel)
-        self.box_tag     .setStyleSheet (cp.styleButton)
-        self.box_exp     .setStyleSheet (cp.styleButton)
-        #self.cbx_more    .setStyleSheet (cp.styleLabel)
-
-        #self.lab_status  .setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
-        #self.lab_status  .setStyleSheet (cp.styleButton) #cp.styleLabel)
-        #self.lab_status  .setStyleSheet (cp.styleBkgd) #cp.styleEditInfo)
-        self.lab_status  .setStyleSheet (cp.styleLabel)
-        self.lab_status  .setAlignment(QtCore.Qt.AlignLeft)
-        self.lab_status  .setTextInteractionFlags (QtCore.Qt.TextSelectableByMouse)
-
-
-    def setFieldsReadOnlySet1(self):
-        self.edi_usr.setReadOnly(True)
-        self.edi_ins.setReadOnly(True)
-        #self.edi_exp.setReadOnly(True)
-        self.edi_ex2.setReadOnly(True)
-        #self.edi_run.setReadOnly(False)
-        #self.edi_tag.setReadOnly(False)
-        #self.edi_res.setReadOnly(False)
-        #self.edi_msg.setReadOnly(False)
-
-        self.setFieldsStyle()
-
-
-    def setFieldsStyle(self):
-        for [lab, edi, par] in self.list_of_fields :
-            if edi.isReadOnly() :
-                edi.setStyleSheet (cp.styleEditInfo)
-            else                :
-                edi.setStyleSheet (cp.styleEdit)
-
-        self.edi_msg.setStyleSheet (cp.styleEdit)
+           self.setFixedHeight(360)
+           self.resize(600,360)
 
 
     def setParent(self,parent) :
         self.parent = parent
-
 
     def resizeEvent(self, e):
         #logger.debug('resizeEvent', self.name)
@@ -1895,16 +1791,12 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
 
     def onEdit(self):
-        logger.debug('onEdit', self.name)
+        plogger.debug('onEdit %s', self.name)
         for [lab, edi, par] in self.list_of_fields :
             if edi.isModified() :
                 edi.setModified(False)
                 par.setValue(str(edi.displayText()))
-                msg = 'Set the local value of ' + str(lab.text()) +\
-                      ' ' + par.value()
-                logger.info(msg, self.name )
-                #print msg
-
+                plogger.info('Set the local value of %s to %s for %s', str(lab.text()), par.value(), self.name )
 
     def onEditMessage(self):
         #"""Do nothing at edition time. Text is picked-up at submission ans saving"""
@@ -1913,22 +1805,52 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.updateLocalParMsg()
         self.set_but_reset()
 
+    @QtCore.pyqtSlot(str)
+    def tagCompleted(self, newtag):
+        if(newtag.startswith("run")):
+            try:
+                run_num = int(newtag.replace("run", ""))
+                plogger.debug("Run number is %s", run_num)
+                self.run.setValue(str(run_num))
+                self.edi_run.setText(self.run.value())
+            except ValueError:
+                plogger.error("Cannot parse run number %s", newtag)
+            return
+        newtags = list(set(self.tag.value().split(" ") + [ "#" + newtag ]))
+        self.tag.setValue(" ".join(newtags))
+        self.edi_tag.setText(self.tag.value())
+
+    @QtCore.pyqtSlot()
+    def firstCharacterTyped(self):
+        plogger.debug("The first character was typed in the message box.")
+        # We no longer expire the tags until submission.
+        self.edi_tag.setProperty("expiration_time", None)
+        current_run = self.lbws.get_current_run()
+        if current_run:
+            self.run.setValue(str(current_run))
+            self.edi_run.setText(self.run.value())
+        current_tags = self.list_of_tags()
+        self.completer.setTags(current_tags)
+
+        self.__set_dynamic_property__(self.but_elog, "hintNext", True)
+        self.__set_dynamic_property__(self.but_grab, "hintNext", False)
+
+    @QtCore.pyqtSlot()
+    def tag_timer_tick(self):
+        plogger.debug("Timer tick....")
+        def clearTagIfTimeOut(tw):
+            if("expiration_time" in tw.dynamicPropertyNames()) and tw.property("expiration_time"):
+                expiration_time = tw.property("expiration_time")
+                plogger.debug("Expiration time: %s", expiration_time)
+                if datetime.now() > expiration_time:
+                    plogger.debug("Tag expiration; clearing tag %s", tw.text())
+                    tw.setText("")
+                    self.tag.setValue('')
+        clearTagIfTimeOut(self.edi_tag)
+
 
     def updateLocalParMsg(self):
         self.msg.setValue(str(self.edi_msg.document().toPlainText()))
-
-
-    @QtCore.pyqtSlot(int)
-    def on_box_tag(self, ind):
-        tag_selected = self.box_tag.currentText()
-        if ind>0 :
-            cp.elog_post_tag.setValue( tag_selected )
-            self.tag.setValue(tag_selected)
-            self.edi_tag.setText( tag_selected )
-            logger.info('Selected tag: ' + tag_selected, self.name)
-
-            # Return the title of the combo box
-            self.box_tag.setCurrentIndex(0) # self.list_of_tags.index(cp.elog_post_tag.value()))
 
 
     @QtCore.pyqtSlot(int)
@@ -1938,21 +1860,14 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         exp_selected = self.box_exp.currentText()
         self.exp.setValue(exp_selected)
         self.lbws.set_experiment(exp_selected)
-        self.set_tags()
 
+    @QtCore.pyqtSlot(int)
+    def on_tag_timeout_change(self, ind):
+        if not self.box_tagtimeouts.isEnabled() : return
+        self.tag_timeout_index = ind
+        plogger.debug("Setting tag timeout to %s", self.tag_timeouts[self.tag_timeout_index])
 
-    def set_tags(self):
-        lst = self.list_of_tags()
-        self.box_tag.clear()
-        self.box_tag.addItems(lst)
-        self.box_tag.setCurrentIndex(0)
-
-        tag_txt = lst[1] if len(lst)>1 else cp.elog_post_tag.value_def()
-        self.tag.setValue(tag_txt)
-        self.edi_tag.setText(tag_txt)
-
-
-    def on_but_update(self):
+    def on_but_currexp(self):
         if self.lbws is None : return
 
         exp_current = self.lbws.get_current_experiment()
@@ -1972,41 +1887,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.box_exp.setCurrentIndex(self.exp_ind_in_list)
         self.box_exp.setEnabled(True)
 
-        self.set_tags()
-
-
-    def on_cbx_copy(self):
-        #if self.cbx_copy .hasFocus() :
-        cbx_status = self.cbx_copy.isChecked()
-        dic_stat = {False:'disabled.', True:'enabled.'}
-        logger.info('Check box is changed: the message copy to the instrumental ELog is ' + dic_stat[cbx_status], self.name )
-
-        self.lab_ex2   .setVisible(cbx_status)
-        self.edi_ex2   .setVisible(cbx_status)
-
-        #self.setFieldsStyle()
-
-
-#    def on_cbx_more(self):
-#        #if self.cbx_copy .hasFocus() :
-#        is_visible = self.cbx_more.isChecked()
-#        dic_stat = {False:'less', True:'more'}
-#        logger.info('Check box status is changed: show %s options' % (dic_stat[is_visible]), self.name )
-#        cp.cbx_more_options.setValue(is_visible)
-
-#        #self.but_grab    .setVisible(True)
-#        #self.but_reset   .setVisible(True)
-#        #self.but_load    .setVisible(True)
-#        #self.but_elog    .setVisible(True)
-#        #self.but_quit    .setVisible(True)
-#        #self.cbx_copy    .setVisible(is_visible)
-#        self.but_logger  .setVisible(is_visible)
-#        self.but_help    .setVisible(is_visible)
-#        #self.but_save_cfg.setVisible(False)
-
-#        self.set_but_save_visibility()
-
-
     def set_but_save_visibility(self):
         if self.wimg.r_pixmap is None :
             self.but_save.setVisible(False)
@@ -2025,11 +1905,12 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         if self.wimg.isVisible() :
             self.but_reset.setText('&Clear Img')
             self.but_reset.setVisible(True)
+            self.but_load.setVisible(False)
 
         elif self.msg.value() != '' :
         #elif not str(self.edi_msg.document().toPlainText()) != '' :
             self.but_reset.setText('&Clear Msg')
-            self.but_reset.setVisible(True)
+            self.but_reset.setVisible(False)
 
         else :
             self.but_reset.setText('&Clear')
@@ -2037,12 +1918,23 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
 #-----------------------------
 
+    def __set_dynamic_property__(self, wdgt, propname, propval):
+        """
+        Set a dynamic property and reapply the widget's style.
+        """
+        wdgt.setProperty(propname, propval)
+        wdgt.style().unpolish(wdgt)
+        wdgt.style().polish(wdgt)
+
+
     def on_but_grab(self):
         logger.info('Grab image of current monitor', self.name)
         if self.wimg != None :
 
-            self.but_elog.setStyleSheet(cp.styleButton)
+            # self.but_elog.setStyleSheet(cp.styleButton)
             self.but_elog.setEnabled(False)
+            # self.but_elog_ins.setStyleSheet(cp.styleButton)
+            self.but_elog_ins.setEnabled(False)
             #self.but_elog.setVisible(False)
             #self.emit(QtCore.SIGNAL('grab_image()'))
 
@@ -2054,8 +1946,42 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             self.set_but_reset()
             #------------
 
-            self.but_elog.setStyleSheet(cp.styleButtonGood)
+            # self.but_elog.setStyleSheet(cp.styleButtonGood)
             self.but_elog.setEnabled(True)
+            # self.but_elog_ins.setStyleSheet(cp.styleButtonGood)
+            self.but_elog_ins.setEnabled(True)
+            plogger.debug("Restarting the tag expiration timer")
+            self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
+            self.__set_dynamic_property__(self.but_grab, "hintNext", False)
+            self.__set_dynamic_property__(self.but_elog, "hintNext", True)
+
+
+    def on_full_screen_grab(self):
+        logger.info('Grab image of full screen', self.name)
+        if self.wimg != None :
+            # self.but_elog.setStyleSheet(cp.styleButton)
+            self.but_elog.setEnabled(False)
+            # self.but_elog_ins.setStyleSheet(cp.styleButton)
+            self.but_elog_ins.setEnabled(False)
+            #self.but_elog.setVisible(False)
+            #self.emit(QtCore.SIGNAL('grab_image()'))
+
+            self.repaint()
+            #------------
+            self.wimg.grabFullScreen()
+            self.showImage(is_visible=True)
+            self.set_but_save_visibility()
+            self.set_but_reset()
+            #------------
+
+            # self.but_elog.setStyleSheet(cp.styleButtonGood)
+            self.but_elog.setEnabled(True)
+            # self.but_elog_ins.setStyleSheet(cp.styleButtonGood)
+            self.but_elog_ins.setEnabled(True)
+            plogger.debug("Restarting the tag expiration timer")
+            self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
+            self.__set_dynamic_property__(self.but_grab, "hintNext", False)
+            self.__set_dynamic_property__(self.but_elog, "hintNext", True)
 
 
     def on_but_reset(self):
@@ -2074,6 +2000,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         else :
             pass
 
+        self.edi_msg.resetFirstCharacterDone()
         self.set_but_reset()
 
 
@@ -2139,8 +2066,13 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         return False
 
 #-----------------------------
-
     def on_but_elog(self):
+        self.__submit__(False)
+
+    def on_but_elog_ins(self):
+        self.__submit__(True)
+
+    def __submit__(self, submit_to_instrument_elog):
 
         if not self.submission_is_allowed() : return
 
@@ -2160,14 +2092,15 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.msg.setValue(str(self.edi_msg.document().toPlainText()))
 
         exp = self.exp.value()
-        tag = self.tag.value() # str(self.edi_tag.displayText())
-        run = self.run.value() # str(self.edi_run.displayText())
-        res = self.res.value() # str(self.edi_res.displayText())
+        tags = " ".join([re.compile("^#").sub("", x) for x in self.tag.value().split(" ") ])
+        plogger.info("Tags: %s ", tags)
+        run = self.run.value()
+        res = None
         msg = self.msg.value() # str(self.edi_msg.document().toPlainText())
 
         logger.info('2. Submit message to ELog', self.name )
 
-        log_text = self.get_text_of_msg_parameters(msg, run, res, tag, path)
+        log_text = self.get_text_of_msg_parameters(msg, run, res, tags, path)
         logger.info('ELog submission parameters:'+log_text, self.name )
 
         if not self.is_valid_message(msg) :
@@ -2176,21 +2109,20 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         msg_id = 0
         if self.lbws is not None :
-            result = self.lbws.post(msg, run, res, tag, path)
-            logger.info('Responce of submission: ' + str(result), self.name )
+            plogger.info("Run %s", run)
+            result = self.lbws.post(msg, run, res, tags, path)
+            plogger.info('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
-
-            status_txt = 'Last submitted msg id: ' + str(msg_id)
-            self.setStatus( msg=status_txt )
 
             #NORMAL: result: {'status': 'success', 'message_id': '125263'}
             #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
 
         # Submit copy of the message to the instrument ELog
-        if self.cbx_copy.isChecked() and self.lbws2 is not None :
+        # MMMMMMMMMMMMMMMMM
+        if submit_to_instrument_elog and self.lbws2 is not None :
             run, res = '', ''
-            lst_tag = [tag, exp]
+            lst_tag = tags + exp
             msg2_id = 0
 
             log_text = self.get_text_of_msg_parameters(msg, run, res, lst_tag, path)
@@ -2209,13 +2141,16 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 #-----------------------------
 
     def reset_fields_after_submission(self) :
-        self.run.setValue('current')
+        self.run.setValue('')
         self.res.setValue('')
+        self.msg.setValue('')
+        self.edi_msg.setText(self.msg.value())
         self.edi_run.setText(self.run.value())
-        self.edi_res.setText(self.res.value())
-        self.cbx_copy.setChecked(False)
-        self.tag.setValue('')
-        self.edi_tag.setText(self.tag.value())
+        self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
+        self.__set_dynamic_property__(self.but_elog, "hintNext", False)
+        self.__set_dynamic_property__(self.but_grab, "hintNext", True)
+        self.edi_msg.resetFirstCharacterDone()
+        self.edi_msg.setFocus()
 
 #-----------------------------
 
@@ -2269,7 +2204,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     def on_but_save_cfg(self):
         logger.debug('on_but_save_cfg',  self.name )
-        cp.elog_post_tag.setValue( self.tag.value() )
+        cp.elog_post_tag.setValue(self.tag.value())
         cp.saveParametersInFile( cp.fname_cp )
 
 
@@ -2311,17 +2246,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         msg += '\n"Clear" button - clears the image.'
         return msg
 
-
-    def setStatus(self, ind=None, msg='') :
-        #if   self.stat_ind == 0 : self.lab_status.setStyleSheet(cp.styleButtonGood) # cp.styleStatusGood)
-        #elif self.stat_ind == 1 : self.lab_status.setStyleSheet(cp.styleButtonWarning) # cp.styleStatusWarning)
-        #elif self.stat_ind == 2 : self.lab_status.setStyleSheet(cp.styleButtonBad) # cp.styleStatusAlarm)
-        self.lab_status.setText(str(msg))
-
-    def enforceStatusRepaint(self) :
-        self.lab_status.repaint()
-        self.repaint()
-
 #-----------------------------
 
 def test_GUIGrabSubmitELog() :
@@ -2335,11 +2259,11 @@ def test_GUIGrabSubmitELog() :
 def check_pwd(opts, args):
     if opts.pas is not None : return
     suffix = opts.url.rsplit('-',1)[-1] # splits 'auth', 'pam', or 'kerb'
-    if suffix == 'kerb'     : return
+    if 'kerb' in suffix: return
 
     msg = 'To use %s and submitt messages in ELog' % os.path.basename(sys.argv[0])\
          +'\nauthentication of user "%s" is required.\n\nPassword:' % opts.usr
-    text, ok = QtGui.QInputDialog().getText(None, 'Authentication', msg, QtWidgets.QLineEdit.Password)
+    text, ok = QtWidgets.QInputDialog().getText(None, 'Authentication', msg, QtWidgets.QLineEdit.Password)
     #print 'Dialog results: %s %s' % (text, ok)
 
     if ok :
@@ -2370,12 +2294,11 @@ def input_options_parser() :
 
     msg_usg  = '  %prog [options] args\n'\
              + 'Example for usr: %prog -i AMO:0 -e amodaq14 -u <login-name> # password will be requested for authentication\n'\
-             + 'Example for opr: %prog -i AMO:0 -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth'
+             + 'Example for opr: %prog -i AMO:0 -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth/lgbk'
     #         + 'Example: /reg/g/pcds/pds/grabber/bin/%prog -i AMO:0 -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth'
 
-    url_lst = ('https://pswww.slac.stanford.edu/ws-auth',
-               'https://pswww.slac.stanford.edu/ws-pam',
-               'https://pswww.slac.stanford.edu/ws-kerb')
+    url_lst = ('https://pswww.slac.stanford.edu/ws-auth/lgbk',
+               'https://pswww.slac.stanford.edu/ws-kerb/lgbk')
     url_str = '\n'.join(url_lst)
     url_def = url_lst[1]
 
@@ -2404,7 +2327,7 @@ def input_options_parser() :
 # python /reg/g/pcds/pds/grabber/bin/grelog.py -i AMO -e amodaq14 -u amoopr -p <password> -w https://pswww.slac.stanford.edu/ws-auth
 # grelog.py -i AMO -e amodaq14 -u amoopr -w https://pswww.slac.stanford.edu/ws-auth
 #---------------------------------
-from LogBookClient.LogBookWebService import LogBookWebService
+
 
 def run_GUIGrabSubmitELog() :
 
@@ -2426,6 +2349,17 @@ def run_GUIGrabSubmitELog() :
 
     app = QtWidgets.QApplication(sys.argv)
 
+    fontfile = os.path.abspath(os.path.join(__file__, "..", "..", "static", "PlayfairDisplay-Regular.ttf"))
+    plogger.debug("Loading font file %s", fontfile)
+    id = QtGui.QFontDatabase.addApplicationFont(fontfile)
+    if id >= 0:
+        plogger.debug("Using Playfair Font")
+        app.setFont(QtGui.QFont(QtGui.QFontDatabase.applicationFontFamilies(id)[0], 10))
+
+    with open(os.path.abspath(os.path.join(__file__, "..", "..", "static", "lgbk.css")), 'r') as f:
+        app.setStyleSheet(f.read())
+
+
     check_input_pars(opts, args)
 
     #-----------------------------
@@ -2440,7 +2374,7 @@ def run_GUIGrabSubmitELog() :
 
     print('Start grabber for ELog with input parameters:')
     for k,v in list(pars.items()):
-        if k is not 'pas' : print('%9s : %s' % (k,v))
+        if k != 'pas' : print('%9s : %s' % (k,v))
 
     lbws = LogBookWebService(**pars)
     #lbws.print_experiments()
@@ -2457,7 +2391,7 @@ def run_GUIGrabSubmitELog() :
 
     print('Open web service for copy messages in the instrumental ELog:')
     for k,v in list(pars2.items()):
-        if k is not 'pas' : print('%9s : %s' % (k,v))
+        if k != 'pas' : print('%9s : %s' % (k,v))
 
     lbws2 = LogBookWebService(**pars2)
     #lbws2.print_experiments()
@@ -2467,6 +2401,7 @@ def run_GUIGrabSubmitELog() :
     #w  = GUIGrabSubmitELog.py(**pars)
     w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=lbws2)
     w.show()
+    #w.dumpObjectTree()
     app.exec_()
 
     #del QtGui.qApp
@@ -2482,6 +2417,8 @@ def run_GUIGrabSubmitELog() :
 #-----------------------------
 
 if __name__ == "__main__" :
+
+    plogger.debug("Starting the application")
 
     if len(sys.argv)==1 :
         sys.argv.append('-h')

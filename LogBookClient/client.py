@@ -9,7 +9,6 @@ import io
 import os
 import csv
 from getpass    import getpass
-from simplejson import JSONDecodeError
 
 ##########################
 # Non-Standard Packages --

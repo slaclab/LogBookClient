@@ -1,0 +1,31 @@
+QLabel {
+    padding: 0;
+    margin: 0;
+    font-family: Optima, PlayfairDisplay, Serif
+}
+
+QLineEdit, QTextEdit {
+    padding: 0;
+    margin: 0;
+    font-family: Optima, PlayfairDisplay, Serif
+}
+
+QPushButton {
+    margin: 0;
+    font-family: Optima, PlayfairDisplay, Serif;
+    border-style: outset;
+    border-width: 1px;
+    border-radius: 10px;
+    border-color: beige;
+    padding: 0.5em;
+}
+
+QPushButton#setcurexp {
+    padding: 0.1em;
+    margin: 0;
+    max-width: 2.0em;
+}
+
+QPushButton[hintNext="true"] {
+    background-color: PaleGreen;
+}
