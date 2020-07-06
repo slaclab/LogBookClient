@@ -226,7 +226,7 @@ class ElogClient(object):
             experiment = None
 
         if facilities:
-            area = 'NEH'
+            area = 'OPS'
             name = '{} Instrument'.format(hutch)
 
         else:
@@ -280,7 +280,7 @@ class ElogClient(object):
             experiment = None
 
         if facilities:
-            area = 'NEH'
+            area = 'OPS'
             name = '{} Instrument'.format(hutch)
 
         else:

@@ -727,7 +727,7 @@ class ConfigParametersForApp ( ConfigParameters ) :
         self.elog_post_tag       = self.declareParameter( name='ELOG_POST_TAG',           val_def='SCREENSHOT',      type='str' )
         #self.elog_post_ins       = self.declareParameter( name='ELOG_POST_INSTRUMENT',    val_def='AMO',             type='str' )
         #self.elog_post_exp       = self.declareParameter( name='ELOG_POST_EXPERIMENT',    val_def='amodaq14',        type='str' )
-        #self.elog_post_in2       = self.declareParameter( name='ELOG_POST_INSTRUMENT_2',  val_def='NEH',             type='str' )
+        #self.elog_post_in2       = self.declareParameter( name='ELOG_POST_INSTRUMENT_2',  val_def='OPS',             type='str' )
         #self.elog_post_ex2       = self.declareParameter( name='ELOG_POST_EXPERIMENT_2',  val_def='CXI Instrument',  type='str' )
         #self.elog_post_run       = self.declareParameter( name='ELOG_POST_RUN',           val_def='',                type='str' )
         #self.elog_post_res       = self.declareParameter( name='ELOG_POST_RESPONCE',      val_def='',                type='str' )
@@ -2380,7 +2380,7 @@ def run_GUIGrabSubmitELog() :
     #lbws.print_experiments()
 
     #-----------------------------
-    pars2 ={ 'ins'    : 'NEH',
+    pars2 ={ 'ins'    : 'OPS',
              'sta'    : sta,
              'exp'    : ins + ' Instrument',
              'url'    : opts.url,

@@ -10,7 +10,7 @@ class LogEntry(object):
     """
     A LogEntry consists of some text description, an author and a group of
     associated logbooks. It also contains associated tags and attachments
-        
+
     Parameters
     ---------
     text: string, optional
@@ -40,20 +40,20 @@ class LogEntry(object):
         else:
             text = ''
 
-        
+
         self.text   = text.strip()
         self.tags   = tags
-        
+
         if author is None:
             raise ValueError('You must specify an author')
         else:
             self.author = author
-        
+
         if logbooks is None:
             raise ValueError('You must specify a logbook')
         else:
             self.logbooks = logbooks
-        
+
         if attachments is not None:
             self.attachments = attachments
         else:
@@ -68,27 +68,27 @@ class LogEntry(object):
             self.run = '{}'.format(run).strip()
         else:
             self.run = ''
-            
- 
+
+
     def __iter__(self):
         rtn = list()
-        
+
         def update(name,value):
             if value:
                 try:
                     iter(value)
-                
+
                 except TypeError:
-                    pass 
+                    pass
 
                 else:
                     if name == 'tags':
                         if any(isinstance(x, Tag) for x in value):
                             value = [v.name for v in value]
-                        
+
                         elif isinstance(value,six.string_types):
                             value = [value]
-                     
+
                 rtn.append((name,value))
 
 
@@ -104,7 +104,7 @@ class LogEntry(object):
 class Tag(object):
     """
     A Tag consists of a unique name, used to identfy entries
-    
+
     Parameters
     ----------
     name : string
@@ -143,24 +143,24 @@ class Tag(object):
             self.state == 'Active'
         else:
             self.state = 'Inactive'
-    
+
 
     def __cmp__(self,*arg, **kwargs):
         if arg[0] is None:
             return 1
         return cmp(self.name, arg[0].name)
-    
+
     def __repr__(self):
         return '<Tag Object :{}, State :{}>'.format(self.name,
-                                                    self.state) 
+                                                    self.state)
 
 class Attachment(object):
     """
     A class representation of an ELog Attachment.
-        
+
     Parameters
     ----------
-    filename: string 
+    filename: string
         Filename of attachment
 
     desc : string, optional
@@ -174,17 +174,17 @@ class Attachment(object):
     def __init__(self, filename , desc=''):
         self.filename    = filename
         self.description = '{}'.format(desc).strip()
-   
- 
+
+
     def get_file_post(self):
         """
         Return tuple of file postings
         """
         basename = os.path.basename(self.filename)
-        
+
         return (basename, self.file, self.description)
 
-    
+
     def __repr__(self):
         return '<Attachment from file {}>'.format(self.filename)
 
@@ -197,14 +197,14 @@ class Logbook(object):
     name. These are usually represented in text at the top of the HTML page as
     `{area} / {name}`. Keep in mind that the combination of area and name might
     not be intuitiive. For instance, all of the facilities Logbooks are
-    classified as being in the NEH area, with each logbook identified as
-    `{hutch} Instrument.`  
-   
+    classified as being in the OPS area, with each logbook identified as
+    `{hutch} Instrument.`
+
     Parameters
     ----------
     area : string
         The three letter acronym for the Experimental Area, capitalization
-        optional. 
+        optional.
 
     name : string, optional
         Name of the Elog requested. By default, the current experiment for the
@@ -214,19 +214,19 @@ class Logbook(object):
     active : bool, optional
         Initialize the logbook as active or not
     """
-    def __init__(self, area=None, name=None, 
+    def __init__(self, area=None, name=None,
                  active=True):
-        
+
         self.area  = area.upper().strip()
-        
+
         if not name:
-            self.name = 'current' 
+            self.name = 'current'
         else:
             self.name = name.strip()
-        
+
         if active:
             self.state = 'Active'
-        
+
         else:
             self.state = 'Inactive'
 
@@ -249,19 +249,16 @@ class Logbook(object):
         else:
             self.state = 'Inactive'
 
-    
+
     def __cmp__(self,*arg,**kwargs):
         if arg[0] is None:
             return 1
-        
+
         return cmp((self.area,   self.name),
                    (arg[0].area, arg[0].name))
 
- 
+
     def __repr__(self):
         return '<Logbook for {} in {}, status: {}>'.format(self.name,
                                                            self.area,
                                                            self.state,)
-
-
-

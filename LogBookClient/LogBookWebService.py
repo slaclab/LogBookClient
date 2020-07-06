@@ -89,7 +89,7 @@ def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None
                         d[experiment] = e
             else:
                 for e in result['value']:
-                    if e['instrument'] in [ instrument, 'NEH' ]:
+                    if e['instrument'] in [ instrument, 'OPS' ]:
                         d[e['name']] = e
         return d
 
