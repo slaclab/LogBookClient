@@ -41,7 +41,6 @@ from LogBookClient.MsgTextEdit import MsgTextEdit
 __author__ = "Mikhail S. Dubrovin"
 
 
-logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
 plogger = logging.getLogger(__name__)
 
 class Logger :
@@ -1796,7 +1795,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             if edi.isModified() :
                 edi.setModified(False)
                 par.setValue(str(edi.displayText()))
-                plogger.info('Set the local value of %s to %s for %s', str(lab.text()), par.value(), self.name )
+                plogger.debug('Set the local value of %s to %s for %s', str(lab.text()), par.value(), self.name )
 
     def onEditMessage(self):
         #"""Do nothing at edition time. Text is picked-up at submission ans saving"""
@@ -2093,7 +2092,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         exp = self.exp.value()
         tags = " ".join([re.compile("^#").sub("", x) for x in self.tag.value().split(" ") ])
-        plogger.info("Tags: %s ", tags)
+        plogger.debug("Tags: %s ", tags)
         run = self.run.value()
         res = None
         msg = self.msg.value() # str(self.edi_msg.document().toPlainText())
@@ -2109,9 +2108,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         msg_id = 0
         if self.lbws is not None :
-            plogger.info("Run %s", run)
+            plogger.debug("Run %s", run)
             result = self.lbws.post(msg, run, res, tags, path)
-            plogger.info('Response of submission: %s %s', str(result), self.name )
+            plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
 
@@ -2312,7 +2311,7 @@ def input_options_parser() :
     parser.add_option('-f', '--cfg', dest='cfname', default=None,   action='store', type='string', help='the file name with configuration parameters (by default is not used)')
     parser.add_option('-u', '--usr', dest='usr',    default=None,   action='store', type='string', help='the user name to connect to the web service')
     parser.add_option('-p', '--pas', dest='pas',    default=None,   action='store', type='string', help='the password to connect to the web service (by default is used for opr accounts)')
-    #parser.add_option('-v', '--verbose',      dest='verb',    default=True, action='store_true',           help='allows print on console')
+    parser.add_option('-v', '--verbose', dest='verb', default=False, action='store_true', help='Turn on debug logging')
     #parser.add_option('-q', '--quiet',        dest='verb',                  action='store_false',          help='supress print on console')
 
     (opts, args) = parser.parse_args()
@@ -2332,8 +2331,11 @@ def input_options_parser() :
 def run_GUIGrabSubmitELog() :
 
     (opts, args) = input_options_parser()
-    #print 'opts:\n', opts
-    #print 'args:\n', args
+
+    if opts.verb:
+        logging.basicConfig(level=logging.DEBUG, handlers=[logging.StreamHandler()])
+    else:
+        logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler()])
 
     #-----------------------------
     print('File name for I/O configuration parameters:', str(opts.cfname))

@@ -190,7 +190,7 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
         #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
 
         if result['success']:
-            print('Server response %s' % result )
+            plogger.debug('Server response %s', result )
         #else :
         #    print 'Error:', result['message']
 
