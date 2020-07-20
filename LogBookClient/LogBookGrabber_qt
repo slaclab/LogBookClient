@@ -2162,7 +2162,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         else :
             #print 'Error:', result['message']
-            resp = str(result['message'])
+            resp = str(result.get('errormsg', ""))
             confirm_dialog_box(self, text='Message to ELog is not submitted.\n' + resp)
             msg_id = ''
             return msg_id
