@@ -2113,6 +2113,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
+            if not result.get('success', True):
+                self.but_elog.setEnabled(True)
+                return
+
 
             #NORMAL: result: {'status': 'success', 'message_id': '125263'}
             #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
