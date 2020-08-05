@@ -1824,10 +1824,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         plogger.debug("The first character was typed in the message box.")
         # We no longer expire the tags until submission.
         self.edi_tag.setProperty("expiration_time", None)
-        current_run = self.lbws.get_current_run()
-        if current_run:
-            self.run.setValue(str(current_run))
-            self.edi_run.setText(self.run.value())
         current_tags = self.list_of_tags()
         self.completer.setTags(current_tags)
 
