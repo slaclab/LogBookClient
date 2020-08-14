@@ -295,13 +295,6 @@ class LogBookWebService :
         result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \
                                     msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att])
         return  result
-        #NORMAL: result: {'status': 'success', 'message_id': '125263'}
-        #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
-
-    def post_lists(self, msg='', run='', res='', lst_tag=[''], lst_att=['']) :
-        result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \
-                                    msg=msg, run_num=run, msg_id=res, lst_tag=lst_tag, lst_fname=lst_att)
-        return result
 
 
 #----------------------------------

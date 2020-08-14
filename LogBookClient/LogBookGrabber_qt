@@ -2122,13 +2122,13 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         # MMMMMMMMMMMMMMMMM
         if submit_to_instrument_elog and self.lbws2 is not None :
             run, res = '', ''
-            lst_tag = tags + exp
+            lst_tag = tags + " " + exp
             msg2_id = 0
 
             log_text = self.get_text_of_msg_parameters(msg, run, res, lst_tag, path)
             logger.info('Instrumental ELog parameterss:'+log_text, self.name )
 
-            result2 = self.lbws2.post_lists(msg, run, res, lst_tag, [path])
+            result2 = self.lbws2.post(msg, run, res, lst_tag, path)
             msg2_id = self.get_msg_id_from_result(result2, comment='Responce of submission to instrumental ELog: ')
 
         self.on_but_reset()
