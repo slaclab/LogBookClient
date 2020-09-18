@@ -54,6 +54,8 @@ plogger = logging.getLogger(__name__)
 def __get_auth_params(ws_url=None, user=None, passwd=None):
     suffix = ws_url.rsplit('-',1)[-1]
     authParams = {}
+    if not user and not passwd:
+        return authParams
     if passwd:
         authParams['auth']=HTTPBasicAuth(user, passwd)
     else:

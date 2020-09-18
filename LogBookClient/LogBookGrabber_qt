@@ -27,6 +27,8 @@ import pwd
 import tempfile
 import sys
 import re
+import platform
+import getpass
 from copy import deepcopy
 from time import time, localtime, strftime, sleep
 
@@ -34,7 +36,7 @@ from datetime import datetime, timedelta
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 
-from LogBookClient.LogBookWebService import LogBookWebService
+from LogBookClient.LogBookWebService import LogBookWebService, submit_msg_to_elog
 from LogBookClient.TagCompleter import TagCompleter
 from LogBookClient.MsgTextEdit import MsgTextEdit
 
@@ -1433,7 +1435,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     res = LocalParameter ()
     msg = LocalParameter ()
 
-    def __init__ ( self, parent=None, cfname=None, ifname=None, ofname=None, help_msg=None, lbws=None, lbws2=None ) :
+    def __init__ ( self, parent=None, cfname=None, ifname=None, ofname=None, help_msg=None, lbws=None, lbws2=None, opts=None ) :
         QtWidgets.QWidget.__init__(self)
         self.setGeometry(50, 10, 620, 620)
         self.setWindowTitle('Grubber for ELog')
@@ -1452,6 +1454,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.parent     = parent
         self.lbws       = lbws
         self.lbws2      = lbws2
+        self.opts       = opts
         self.count_msgs = 0
 
         self.setLocalPars()            ### <==========
@@ -1487,6 +1490,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_currexp  = QtWidgets.QPushButton()
         self.but_currexp.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "refresh.svg"))))
         self.but_currexp.setObjectName("setcurexp")
+        self.but_issue  = QtWidgets.QPushButton()
+        self.but_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "bug.svg"))))
+        self.but_issue.setObjectName("Log an issue")
         self.but_elog     = QtWidgets.QPushButton('&Submit')
         self.but_elog_ins = QtWidgets.QPushButton('&Submit (+ ins)')
         self.but_logger   = QtWidgets.QPushButton('Logger')
@@ -1582,6 +1588,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_logger.clicked.connect(self.on_but_logger)
         self.but_help.clicked.connect(self.on_but_help)
         self.but_quit.clicked.connect(self.on_but_quit)
+        self.but_issue.clicked.connect(self.on_but_daqami_crashed)
         #self.connect(self.but_save_cfg, QtCore.SIGNAL('clicked()'),       self.on_but_save_cfg)
 
         self.box_exp.currentIndexChanged.connect(self.on_box_exp)
@@ -1666,6 +1673,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_logger.setToolTip('Open/Close logger window')
         self.but_quit  .setToolTip('Save configuration parameters in file \nand exit this application. \n"x"-just exit application.')
         self.but_help  .setToolTip('Get help message \nin the logger window')
+        self.but_issue .setToolTip('Log the fact that the DAQ/AMI crashed. This should not interfere with your current activity.')
         #self.cbx_more  .setToolTip('Show more control buttons')
 
         self.box_exp   .setToolTip('Select experiment\n from menu')
@@ -1698,6 +1706,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.hbox1.addWidget(self.but_load)
         self.hbox1.addWidget(self.but_reset)
         self.hbox1.addWidget(self.but_fsgrab)
+        self.hbox1.addWidget(self.but_issue)
         self.hbox1.addStretch(1)
         self.hbox1.addWidget(self.but_elog_ins)
         self.hbox1.addWidget(self.but_elog)
@@ -2237,6 +2246,19 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         #logger.info('Help message:' + msg, self.name )
         #print msg
 
+    def on_but_daqami_crashed(self):
+        """
+        Log the fact that the DAQ/AMI crashed. We take a full screen show and post it to the Controls experiment.
+        """
+        fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
+        if( 0 != os.system('import -trim -frame -border -window root %s' % (fname.name))) :
+            plogger.debug("Cannot capture the full screen image")
+            return
+        try:
+            resp = submit_msg_to_elog("https://pswww.slac.stanford.edu/ws/lgbk", None, None, "OPS", 0, "Computing", self.opts.cmd, [], lst_tag=[self.exp.getValue(), "AMI_DAQ_Issue"], msg="AMI/DAQ issue in experiment %s %s user %s on machine %s" % (self.exp.getValue(), self.opts.inssta, getpass.getuser(), platform.node()), lst_fname=[fname.name])
+            plogger.debug(resp)
+        except:
+            plogger.exception("Exception posting a DAQ/AMI log message")
 
     def help_message(self):
         msg  = '\n' + '='*60
@@ -2402,7 +2424,7 @@ def run_GUIGrabSubmitELog() :
     #-----------------------------
     #app = QtGui.QApplication(sys.argv)
     #w  = GUIGrabSubmitELog.py(**pars)
-    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=lbws2)
+    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=lbws2, opts=opts)
     w.show()
     #w.dumpObjectTree()
     app.exec_()
