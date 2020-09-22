@@ -1673,7 +1673,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_logger.setToolTip('Open/Close logger window')
         self.but_quit  .setToolTip('Save configuration parameters in file \nand exit this application. \n"x"-just exit application.')
         self.but_help  .setToolTip('Get help message \nin the logger window')
-        self.but_issue .setToolTip('Log the fact that the DAQ/AMI crashed. This should not interfere with your current activity.')
+        self.but_issue .setToolTip('<p>Log a DAQ/AMI issue in the computing log</p><p>This provides context and timing to PCDS personnel. This happens in the background and should not interfere with your current activity</p>')
         #self.cbx_more  .setToolTip('Show more control buttons')
 
         self.box_exp   .setToolTip('Select experiment\n from menu')
