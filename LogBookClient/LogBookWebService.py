@@ -164,6 +164,9 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
     exper_name = exp.replace(" ", "_")
     serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
     payload = { 'log_text': msg }
+
+    child_output = ''
+
     if run_num != '':
         payload['run_num'] = run_num
     if emails and emails != '':
@@ -193,6 +196,15 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
 
         if result['success']:
             plogger.debug('Server response %s', result )
+            if cmd is not None:
+                child_output = os.popen(cmd).read()
+                payload = { 'log_text': child_output }
+                payload['parent'] = result["value"]["_id"]
+                post_result = requests.post(serverURL, data=payload, **authParams)
+                post_result.raise_for_status()
+                result = post_result.json()
+                plogger.debug('Server response for child entry %s', result )
+
         #else :
         #    print 'Error:', result['message']
 
