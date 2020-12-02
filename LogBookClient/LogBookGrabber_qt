@@ -2324,6 +2324,31 @@ def input_options_parser() :
     url_str = '\n'.join(url_lst)
     url_def = url_lst[1]
 
+    # this should be pulled from DB
+    lowered_hutches = [
+        'asc',
+        'rix',
+        'tmo',
+        'txi',
+        'ued'
+    ]
+
+    uppered_hutches = [
+        'CXI',
+        'DET',
+        'DIA',
+        'EXT',
+        'MEC',
+        'MFX',
+        'MOB',
+        'OPS',
+        'PRJ',
+        'SXR',
+        'USR',
+        'XCS',
+        'XPP'
+    ]
+
     msg_descrip  = '%prog - grabs any selected window on terminal or its part and submits it with message to ELog'
 
     parser = OptionParser(description=msg_descrip, usage=msg_usg)
@@ -2338,6 +2363,11 @@ def input_options_parser() :
     #parser.add_option('-q', '--quiet',        dest='verb',                  action='store_false',          help='supress print on console')
 
     (opts, args) = parser.parse_args()
+    if opts.inssta.lower() in lowered_hutches:
+        opts.inssta = opts.inssta.lower()
+    elif opts.inssta.upper() in uppered_hutches:
+        opts.inssta = opts.inssta.upper()
+
     return (opts, args)
 
 #-----------------------------
@@ -2370,6 +2400,7 @@ def run_GUIGrabSubmitELog() :
         ins = opts.inssta[:pos]
         if len(opts.inssta[pos:]) > 1 : sta = opts.inssta[pos+1:]
 
+    print('here is instrument! ', ins)
     #-----------------------------
 
     app = QtWidgets.QApplication(sys.argv)
