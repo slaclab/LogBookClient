@@ -2368,6 +2368,15 @@ def input_options_parser() :
     elif opts.inssta.upper() in uppered_hutches:
         opts.inssta = opts.inssta.upper()
 
+    if opts.exp:
+        if " Instrument" in opts.exp:
+            opts.exp = opts.exp.replace(" Instrument", "_Instrument")
+            plogger.info("Using the _Instrument for the instrument log %s", opts.exp)
+        if opts.exp in [ x.lower() + "_Instrument" for x in uppered_hutches]:
+            opts.exp = opts.exp.split("_")[0].upper() + "_Instrument"
+            plogger.info("Replacing with correct case for instrument log %s", opts.exp)
+
+
     return (opts, args)
 
 #-----------------------------
