@@ -87,12 +87,12 @@ def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None
             #
             if experiment is not None:
                 for e in result['value']:
-                    if experiment == e['name']:
+                    if experiment == e['_id']:
                         d[experiment] = e
             else:
                 for e in result['value']:
                     if e['instrument'] in [ instrument, 'OPS' ]:
-                        d[e['name']] = e
+                        d[e['_id']] = e
         return d
 
     except requests.exceptions.RequestException as e:
@@ -114,9 +114,9 @@ def ws_get_current_experiment (instrument, station, ws_url, user, passwd):
             if e.get('instrument', None) == instrument:
                 if station:
                     if str(station) == str(e["station"]):
-                        return e['name']
+                        return e['_id']
                 else:
-                    return e['name']
+                    return e['_id']
 
         print("ERROR: no current experiment configured for this instrument:station %s:%s" % (instrument,station))
         sys.exit(1)
@@ -296,7 +296,7 @@ class LogBookWebService :
 
     def get_list_of_experiments(self) :
         d = ws_get_experiments (None, self.ins, self.url, self.usr, self.pas)
-        return list(d.keys())
+        return list(x.replace(" ", "_") for x in d.keys())
 
 
     def get_current_experiment(self) :
