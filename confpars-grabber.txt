@@ -1,0 +1,5 @@
+LOG_LEVEL_OF_MSGS                info
+LOG_FILE_FOR_LEVEL               ./log_for_level.txt
+IMG_INPUT_FNAME                  ./img-1.ppm
+IMG_OUTPUT_FNAME                 ./img-1.ppm
+ELOG_POST_TAG                    
