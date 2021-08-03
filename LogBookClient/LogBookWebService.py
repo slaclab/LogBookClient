@@ -32,6 +32,7 @@ import http.client
 import mimetypes
 import pwd
 import json
+from collections import OrderedDict
 import socket
 import stat
 import tempfile
@@ -65,6 +66,18 @@ def __get_auth_params(ws_url=None, user=None, passwd=None):
             authParams['headers']=KerberosTicket("HTTP@" + urlparse(ws_url).hostname).getAuthHeaders()
     return authParams
 
+def custom_sort_exps(exps):
+    """
+    Sort the experiments according to JIRA LCLSECSD-210
+    Active first, OPS next and then descending run period/alphabetical within that run period
+    """
+    # Python's sort is stable; so we sort multiple times lowest attr first
+    exps = OrderedDict(sorted(exps.items(), key=lambda x : x[1]["name"]))
+    # print( [ v["name"] for k, v in exps.items() ] )
+    exps = OrderedDict(sorted(exps.items(), key=lambda x : x[1]["name"][-2:], reverse=True))
+    exps = OrderedDict(sorted(exps.items(), key=lambda x : not x[1].get("instrument", "") == "OPS"))
+    exps = OrderedDict(sorted(exps.items(), key=lambda x : not x[1].get("is_active", False)))
+    return exps
 
 def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None, passwd=None):
 
@@ -93,6 +106,8 @@ def ws_get_experiments (experiment=None, instrument=None, ws_url=None, user=None
                 for e in result['value']:
                     if e['instrument'] in [ instrument, 'OPS' ]:
                         d[e['_id']] = e
+        if len(d) > 2:
+            d = custom_sort_exps(d)
         return d
 
     except requests.exceptions.RequestException as e:
