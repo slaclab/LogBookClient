@@ -325,6 +325,19 @@ class LogBookWebService :
                                     msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att])
         return  result
 
+    def postJIRATicket(self, title, description, lst_fname=None):
+        files = []
+        if lst_fname and lst_fname != [''] :
+            files = [("files",  (os.path.basename(fname), open(fname, 'rb'), mimetypes.guess_type(fname)[0])) for fname in lst_fname ]
+
+        resp = requests.post("https://jira.slac.stanford.edu/rest/collectors/1.0/template/custom/d44086d8", headers={"X-Atlassian-Token": "no-check"}, data={
+            "fullname": self.usr,
+            "email": self.usr + "@slac.stanford.edu",
+            "summary": title,
+            "description": description
+            }, files=files)
+        resp.raise_for_status()
+        return resp.text
 
 #----------------------------------
 #----------------------------------
