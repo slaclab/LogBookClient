@@ -2270,7 +2270,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             plogger.debug("Cannot capture the full screen image")
             return
         try:
-            resp = submit_msg_to_elog("https://pswww.slac.stanford.edu/ws/lgbk", None, None, "OPS", 0, "Computing", self.opts.cmd, [], lst_tag=[self.exp.getValue(), "AMI_DAQ_Issue"], msg="AMI/DAQ issue in experiment %s %s user %s on machine %s" % (self.exp.getValue(), self.opts.inssta, getpass.getuser(), platform.node()), lst_fname=[fname.name])
+            resp = submit_msg_to_elog(self.lbws.url, None, None, "OPS", 0, "Computing", self.opts.cmd, [], lst_tag=[self.exp.getValue(), "AMI_DAQ_Issue"], msg="AMI/DAQ issue in experiment %s %s user %s on machine %s" % (self.exp.getValue(), self.opts.inssta, getpass.getuser(), platform.node()), lst_fname=[fname.name])
             plogger.debug(resp)
         except:
             plogger.exception("Exception posting a DAQ/AMI log message")
