@@ -1426,6 +1426,7 @@ class LocalParameter :
 class JIRAIssueDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.resize(600, 600);
 
         self.setWindowTitle("Create an issue in JIRA!")
 
