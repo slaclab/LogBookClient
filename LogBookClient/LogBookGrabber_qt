@@ -1542,8 +1542,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "bug.svg"))))
         self.but_issue.setObjectName("Log an issue")
         self.but_jira_issue  = QtWidgets.QPushButton()
-        self.but_jira_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "bug.svg"))))
+        self.but_jira_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "ticket.svg"))))
         self.but_jira_issue.setObjectName("Log an JIRA issue")
+
         self.but_elog     = QtWidgets.QPushButton('&Submit')
         self.but_elog_ins = QtWidgets.QPushButton('&Submit (+ ins)')
         self.but_logger   = QtWidgets.QPushButton('Logger')
