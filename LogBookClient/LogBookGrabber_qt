@@ -1423,44 +1423,6 @@ class LocalParameter :
     def value (self) :
         return self._val
 
-class JIRAIssueDialog(QtWidgets.QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.resize(600, 600);
-
-        self.setWindowTitle("Create an issue in JIRA!")
-
-        QBtn = QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
-
-        self.buttonBox = QtWidgets.QDialogButtonBox(QBtn)
-        self.buttonBox.accepted.connect(self.accept)
-        self.buttonBox.rejected.connect(self.reject)
-
-        self.layout = QtWidgets.QVBoxLayout()
-        self.statuslbl = QtWidgets.QLabel("")
-        self.statuslbl.setStyleSheet("color: red;")
-        self.layout.addWidget(self.statuslbl)
-        self.titlelbl = QtWidgets.QLabel("Summary")
-        self.layout.addWidget(self.titlelbl)
-        self.title = QtWidgets.QLineEdit( )
-        self.layout.addWidget(self.title)
-        self.desclbl = QtWidgets.QLabel("Description")
-        self.layout.addWidget(self.desclbl)
-        self.desc = QtWidgets.QTextEdit(  )
-        self.layout.addWidget(self.desc)
-        self.layout.addWidget(self.buttonBox)
-        self.setLayout(self.layout)
-
-    def done(self, r):
-        if r == QtWidgets.QDialog.Accepted:
-            if len(self.title.text()) <= 0:
-                self.statuslbl.setText("Please enter a brief summary")
-                return
-            if len(self.desc.toPlainText()) <= 0:
-                self.statuslbl.setText("Please enter a detailed description")
-                return
-        QtWidgets.QDialog.done(self, r)
-
 #-----------------------------
 #-----------------------------
 #-----------------------------
@@ -1542,9 +1504,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_issue  = QtWidgets.QPushButton()
         self.but_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "bug.svg"))))
         self.but_issue.setObjectName("Log an issue")
-        self.but_jira_issue  = QtWidgets.QPushButton()
-        self.but_jira_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "ticket.svg"))))
-        self.but_jira_issue.setObjectName("Log an JIRA issue")
+        self.but_jira_issue  = QtWidgets.QPushButton("Submit(+ins)+J&IRA")
+        self.but_jira_issue.setObjectName("&Submit (+ ins) (+ JIRA)")
 
         self.but_elog     = QtWidgets.QPushButton('&Submit')
         self.but_elog_ins = QtWidgets.QPushButton('&Submit (+ ins)')
@@ -1688,7 +1649,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     def list_of_tags(self) :
         if self.lbws is not None :
-            return self.lbws.get_list_of_tags()
+            all_tags = self.lbws.get_list_of_tags()
+            _ = [ all_tags.remove(x) for x in [ "ISSUE", "ROADBLOCK" ] if x in all_tags ]
+            return all_tags
         return []
 
 
@@ -1729,7 +1692,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_quit  .setToolTip('Save configuration parameters in file \nand exit this application. \n"x"-just exit application.')
         self.but_help  .setToolTip('Get help message \nin the logger window')
         self.but_issue .setToolTip('<p>Log a DAQ/AMI issue in the computing log</p><p>This provides context and timing to PCDS personnel. This happens in the background and should not interfere with your current activity</p>')
-        self.but_jira_issue.setToolTip('<p>Log a JIRA issue</p>')
+        self.but_jira_issue.setToolTip('<p>In addition to making an eLog entry and posting to the instrument eLog, also log a JIRA issue</p>')
         self.hi_quality.setToolTip('Upload a high quality version of the image with minimal compression. This will increase the attachment size significantly but may preserve details.')
         #self.cbx_more  .setToolTip('Show more control buttons')
 
@@ -2136,7 +2099,13 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     def on_but_elog_ins(self):
         self.__submit__(True)
 
-    def __submit__(self, submit_to_instrument_elog):
+    def on_but_jira_issue(self):
+        """
+        Log a JIRA issue in addition to submitting to the eLog and instrument eLog.
+        """
+        self.__submit__(True, open_JIRA_ticket=True)
+
+    def __submit__(self, submit_to_instrument_elog, open_JIRA_ticket=False):
 
         if not self.submission_is_allowed() : return
 
@@ -2158,6 +2127,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         exp = self.exp.value()
         tags = " ".join([re.compile("^#").sub("", x) for x in self.tag.value().split(" ") ])
+        if open_JIRA_ticket:
+            tags = tags + " ISSUE"
         plogger.debug("Tags: %s ", tags)
         run = self.run.value()
         res = None
@@ -2173,16 +2144,20 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             return
 
         msg_id = 0
+        link_2_msg = ""
         if self.lbws is not None :
             plogger.debug("Run %s", run)
             result = self.lbws.post(msg, run, res, tags, path)
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
+            link_2_msg = re.compile("/ws.*/").sub("/", self.lbws.url) + "/lgbk/" + self.lbws.exp + "/elogs/" + msg_id
+            plogger.info("Link to eLog message is %s", link_2_msg)
             if not result.get('success', True):
                 plogger.error('Response of submission failed: %s %s', str(result), self.name )
                 self.but_elog.setEnabled(True)
                 return
+
 
 
             #NORMAL: result: {'status': 'success', 'message_id': '125263'}
@@ -2321,19 +2296,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             plogger.debug(resp)
         except:
             plogger.exception("Exception posting a DAQ/AMI log message")
-
-    def on_but_jira_issue(self):
-        """
-        Log a JIRA issue
-        """
-        automsg = "Background info: Posted from the grubber in experiment %s %s user %s on machine %s" % (self.exp.getValue(), self.opts.inssta, getpass.getuser(), platform.node())
-        dlg = JIRAIssueDialog(self)
-        if dlg.exec():
-            try:
-                resp = self.lbws.postJIRATicket(dlg.title.text(), dlg.desc.toPlainText() + "\n\n" + automsg)
-            except Exception as e:
-                plogger.exception("Exception posting JIRA ticket")
-                confirm_dialog_box(self, text="There was an exception creating a new JIRA ticket. Please see the grubber's logs for more details", title='Exception creating JIRA ticket')
 
     def on_hiquality_clicked(self):
         """

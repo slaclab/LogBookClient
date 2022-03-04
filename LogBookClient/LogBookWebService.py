@@ -213,13 +213,7 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
             plogger.debug('Server response %s', result )
             if cmd is not None:
                 child_output = os.popen(cmd).read()
-                payload = { 'log_text': child_output }
-                payload['parent'] = result["value"]["_id"]
-                post_result = requests.post(serverURL, data=payload, **authParams)
-                post_result.raise_for_status()
-                result = post_result.json()
-                plogger.debug('Server response for child entry %s', result )
-
+                submit_followup_message(ws_url, usr, passwd, exp, child_output, result["value"]["_id"])
         #else :
         #    print 'Error:', result['message']
 
@@ -227,6 +221,29 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
 
     except requests.exceptions.RequestException as e:
         print("ERROR: failed to generate a new elog entry due to: ", e)
+        return {"success": False, "message": str(e)}
+
+def submit_followup_message(ws_url, usr, passwd, exp, msg, parent_id, lst_fname=['']):
+    """
+    Submit a followup message
+    """
+    exper_name = exp.replace(" ", "_")
+    serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
+    payload = { 'log_text': msg, 'parent': parent_id }
+
+    files = []
+    if lst_fname != [''] :
+        files = [("files",  (os.path.basename(fname), open(fname, 'rb'), mimetypes.guess_type(fname)[0])) for fname in lst_fname ]
+        print(files)
+
+    try:
+        authParams = __get_auth_params(ws_url, usr, passwd)
+        post_result = requests.post(serverURL, data=payload, files=files, **authParams)
+        post_result.raise_for_status()
+        result = post_result.json()
+        return result
+    except requests.exceptions.RequestException as e:
+        print("ERROR: failed to generate a followup elog entry due to: ", e)
         return {"success": False, "message": str(e)}
 
 #----------------------------------
@@ -325,19 +342,9 @@ class LogBookWebService :
                                     msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att])
         return  result
 
-    def postJIRATicket(self, title, description, lst_fname=None):
-        files = []
-        if lst_fname and lst_fname != [''] :
-            files = [("files",  (os.path.basename(fname), open(fname, 'rb'), mimetypes.guess_type(fname)[0])) for fname in lst_fname ]
-
-        resp = requests.post("https://jira.slac.stanford.edu/rest/collectors/1.0/template/custom/d44086d8", headers={"X-Atlassian-Token": "no-check"}, data={
-            "fullname": self.usr,
-            "email": self.usr + "@slac.stanford.edu",
-            "summary": title,
-            "description": description
-            }, files=files)
-        resp.raise_for_status()
-        return resp.text
+    def post_followup(self, msg, parent_id) :
+        result = submit_followup_message(self.url, self.usr, self.pas, self.exp, msg=msg, parent_id=parent_id)
+        return  result
 
 #----------------------------------
 #----------------------------------
