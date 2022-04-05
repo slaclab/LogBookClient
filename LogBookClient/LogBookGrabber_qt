@@ -1468,6 +1468,7 @@ class JIRAIssueDialog(QtWidgets.QDialog):
 
 class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     """GUI sets fields for ELog posting"""
+    lb_resize = QtCore.Signal()
 
     name = 'GUIGrabSubmitELog' # for logger
 
@@ -1821,6 +1822,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         #logger.debug('resizeEvent', self.name)
         self.frame.setGeometry(self.rect())
         #print 'resizeEvent: %s' % str(self.size())
+        self.lb_resize.emit()
 
 
     def moveEvent(self, e):
