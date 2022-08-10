@@ -1423,6 +1423,30 @@ class LocalParameter :
     def value (self) :
         return self._val
 
+class BtnStatusCtxMgr:
+    """
+    Context manager to enable/disable the various status buttons while image grabbing etc
+    """
+    def __init__(self, mainwin, msg):
+        self.mainwin = mainwin
+        self.msg = msg
+        self.title = self.mainwin.windowTitle()
+    def __enter__(self):
+        self.mainwin.but_elog.setEnabled(False)
+        self.mainwin.but_elog_ins.setEnabled(False)
+        self.mainwin.but_jira_issue.setEnabled(False)
+        self.mainwin.setWindowTitle(self.title + " " + self.msg)
+        return "CtxMgr"
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.mainwin.but_elog.setEnabled(True)
+        self.mainwin.but_elog_ins.setEnabled(True)
+        self.mainwin.but_jira_issue.setEnabled(True)
+        self.mainwin.setWindowTitle(self.title)
+        if exc_value:
+            plogger.exception("Exception during " + self.msg, exc_value)
+            help_dialog_box(self.mainwin, text="Exception during " + self.msg + " " + str(exc_value))
+        return True
+
 #-----------------------------
 #-----------------------------
 #-----------------------------
@@ -1957,26 +1981,15 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     def on_but_grab(self):
         logger.info('Grab image of current monitor', self.name)
         if self.wimg != None :
+            with BtnStatusCtxMgr(self, "Grabbing window") as s:
+                self.repaint()
+                #------------
+                self.wimg.grabImage()
+                self.showImage(is_visible=True)
+                self.set_but_save_visibility()
+                self.set_but_reset()
+                #------------
 
-            # self.but_elog.setStyleSheet(cp.styleButton)
-            self.but_elog.setEnabled(False)
-            # self.but_elog_ins.setStyleSheet(cp.styleButton)
-            self.but_elog_ins.setEnabled(False)
-            #self.but_elog.setVisible(False)
-            #self.emit(QtCore.SIGNAL('grab_image()'))
-
-            self.repaint()
-            #------------
-            self.wimg.grabImage()
-            self.showImage(is_visible=True)
-            self.set_but_save_visibility()
-            self.set_but_reset()
-            #------------
-
-            # self.but_elog.setStyleSheet(cp.styleButtonGood)
-            self.but_elog.setEnabled(True)
-            # self.but_elog_ins.setStyleSheet(cp.styleButtonGood)
-            self.but_elog_ins.setEnabled(True)
             plogger.debug("Restarting the tag expiration timer")
             self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
             self.__set_dynamic_property__(self.but_grab, "hintNext", False)
@@ -1986,25 +1999,15 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     def on_full_screen_grab(self):
         logger.info('Grab image of full screen', self.name)
         if self.wimg != None :
-            # self.but_elog.setStyleSheet(cp.styleButton)
-            self.but_elog.setEnabled(False)
-            # self.but_elog_ins.setStyleSheet(cp.styleButton)
-            self.but_elog_ins.setEnabled(False)
-            #self.but_elog.setVisible(False)
-            #self.emit(QtCore.SIGNAL('grab_image()'))
+            with BtnStatusCtxMgr(self, "Grabbing full screen") as s:
+                self.repaint()
+                #------------
+                self.wimg.grabFullScreen()
+                self.showImage(is_visible=True)
+                self.set_but_save_visibility()
+                self.set_but_reset()
+                #------------
 
-            self.repaint()
-            #------------
-            self.wimg.grabFullScreen()
-            self.showImage(is_visible=True)
-            self.set_but_save_visibility()
-            self.set_but_reset()
-            #------------
-
-            # self.but_elog.setStyleSheet(cp.styleButtonGood)
-            self.but_elog.setEnabled(True)
-            # self.but_elog_ins.setStyleSheet(cp.styleButtonGood)
-            self.but_elog_ins.setEnabled(True)
             plogger.debug("Restarting the tag expiration timer")
             self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
             self.__set_dynamic_property__(self.but_grab, "hintNext", False)
