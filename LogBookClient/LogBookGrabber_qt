@@ -2097,24 +2097,25 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
 #-----------------------------
     def on_but_elog(self):
-        self.__submit__(False)
+        with BtnStatusCtxMgr(self, "Posting to eLog") as s:
+            self.__submit__(False)
 
     def on_but_elog_ins(self):
-        self.__submit__(True)
+        with BtnStatusCtxMgr(self, "Posting to eLog") as s:
+            self.__submit__(True)
 
     def on_but_jira_issue(self):
         """
         Log a JIRA issue in addition to submitting to the eLog and instrument eLog.
         """
-        self.__submit__(True, open_JIRA_ticket=True)
+        with BtnStatusCtxMgr(self, "Posting to eLog") as s:
+            self.__submit__(True, open_JIRA_ticket=True)
 
     def __submit__(self, submit_to_instrument_elog, open_JIRA_ticket=False):
 
         if not self.submission_is_allowed() : return
 
         logger.info('Send message to ELog:', self.name )
-
-        self.but_elog.setEnabled(False)
 
         if self.wimg.r_pixmap is None :
             path = ''
@@ -2143,7 +2144,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         logger.info('ELog submission parameters:'+log_text, self.name )
 
         if not self.is_valid_message(msg) :
-            self.but_elog.setEnabled(True)
             return
 
         msg_id = 0
@@ -2158,7 +2158,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             plogger.info("Link to eLog message is %s", link_2_msg)
             if not result.get('success', True):
                 plogger.error('Response of submission failed: %s %s', str(result), self.name )
-                self.but_elog.setEnabled(True)
                 return
 
 
@@ -2180,7 +2179,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             msg2_id = self.get_msg_id_from_result(result2, comment='Responce of submission to instrumental ELog: ')
 
         self.on_but_reset()
-        self.but_elog.setEnabled(True)
 
         self.reset_fields_after_submission()
 
