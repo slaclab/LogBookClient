@@ -174,7 +174,7 @@ def ws_get_tags (expname, ws_url, user, passwd):
 #(inst='AMO', exp='amodaq14', run='825', tag='TAG1',
 # msg='EMPTY MESSAGE', fname=None, fname_att=None, resp=None) :
 
-def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=None, run_num='', msg_id='', msg='', lst_fname=[''], emails=None):
+def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=None, run_num='', msg_id='', msg='', lst_fname=[''], emails=None, submitter=None):
 
     exper_name = exp.replace(" ", "_")
     serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
@@ -190,6 +190,8 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
         payload['parent'] = msg_id
     if lst_tag and lst_tag[0] != '':
         payload['log_tags'] = " ".join(lst_tag)
+    if submitter and submitter != '' and submitter != usr:
+        payload['author'] = submitter
 
     files = []
     if lst_fname != [''] :
@@ -213,7 +215,7 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
             plogger.debug('Server response %s', result )
             if cmd is not None:
                 child_output = os.popen(cmd).read()
-                submit_followup_message(ws_url, usr, passwd, exp, child_output, result["value"]["_id"])
+                submit_followup_message(ws_url, usr, passwd, exp, child_output, result["value"]["_id"], submitter=submitter)
         #else :
         #    print 'Error:', result['message']
 
@@ -223,13 +225,16 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
         print("ERROR: failed to generate a new elog entry due to: ", e)
         return {"success": False, "message": str(e)}
 
-def submit_followup_message(ws_url, usr, passwd, exp, msg, parent_id, lst_fname=['']):
+def submit_followup_message(ws_url, usr, passwd, exp, msg, parent_id, lst_fname=[''],submitter=None):
     """
     Submit a followup message
     """
     exper_name = exp.replace(" ", "_")
     serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
     payload = { 'log_text': msg, 'parent': parent_id }
+    if submitter and submitter != '' and submitter != usr:
+        payload['author'] = submitter
+
 
     files = []
     if lst_fname != [''] :
@@ -337,9 +342,9 @@ class LogBookWebService :
     def get_current_run(self) :
         return ws_get_current_run(self.url, self.usr, self.pas, self.exp)
 
-    def post(self, msg='', run='', res='', tag='', att='') :
+    def post(self, msg='', run='', res='', tag='', att='', submitter=None) :
         result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \
-                                    msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att])
+                                    msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att], submitter=submitter)
         return  result
 
     def post_followup(self, msg, parent_id) :

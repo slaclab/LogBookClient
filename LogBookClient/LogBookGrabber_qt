@@ -29,6 +29,7 @@ import sys
 import re
 import platform
 import getpass
+import pwd
 from copy import deepcopy
 from time import time, localtime, strftime, sleep
 
@@ -1460,6 +1461,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     # Reserve local parameters for ALL FIELDS in GUI
     usr = LocalParameter ()
+    submitter =  LocalParameter ()
     ins = LocalParameter ()
     in2 = LocalParameter ()
     exp = LocalParameter ()
@@ -1542,6 +1544,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         self.lab_exp = QtWidgets.QLabel('Experiment:')
         self.lab_run = QtWidgets.QLabel('Run number:')
+        self.lab_sbm = QtWidgets.QLabel('Submitter:')
         self.lab_tag = QtWidgets.QLabel('Tag:')
         self.lab_tagtimeout = QtWidgets.QLabel('Tag timeout(in mins):')
         self.lab_msg = QtWidgets.QLabel('Message:')
@@ -1552,6 +1555,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         #self.edi_exp = QtWidgets.QLineEdit( self.exp.value() )
         self.edi_run = QtWidgets.QLineEdit( self.run.value() )
+        self.edi_sbm = QtWidgets.QLineEdit( self.submitter.value() )
         self.edi_tag = QtWidgets.QLineEdit( self.tag.value() )
 
         plogger.debug("Initializing the completer")
@@ -1577,9 +1581,11 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         self.grid.addWidget(self.lab_run,     self.grid_row, 0, 1, 1)
         self.grid.addWidget(self.edi_run,     self.grid_row, 1, 1, 1)
-        self.grid.addWidget(self.lab_exp,     self.grid_row, 3, 1, 1)
-        self.grid.addWidget(self.box_exp,     self.grid_row, 4, 1, 1)
-        self.grid.addWidget(self.but_currexp, self.grid_row, 5, 1, 1)
+        self.grid.addWidget(self.lab_sbm,     self.grid_row, 2, 1, 1)
+        self.grid.addWidget(self.edi_sbm,     self.grid_row, 3, 1, 1)
+        self.grid.addWidget(self.lab_exp,     self.grid_row, 4, 1, 1)
+        self.grid.addWidget(self.box_exp,     self.grid_row, 5, 1, 1)
+        self.grid.addWidget(self.but_currexp, self.grid_row, 6, 1, 1)
         self.grid_row = self.grid_row + 1;
 
         self.hbox1_widg = QtWidgets.QWidget(self)
@@ -1600,6 +1606,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         self.list_of_fields = [
             [self.lab_run, self.edi_run,  self.run],
+            [self.lab_sbm, self.edi_sbm,  self.submitter],
             [self.lab_tag, self.edi_tag, self.tag]
             ]
             #[self.lab_exp, self.edi_exp, self.exp],
@@ -1682,6 +1689,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     def setLocalPars(self):
         self.usr.setValue( self.lbws.usr )
+        self.submitter.setValue( self.lbws.usr )
         self.ins.setValue( self.lbws.ins )
         self.exp.setValue( self.lbws.exp )
         self.in2.setValue( self.lbws2.ins )
@@ -1702,6 +1710,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         #self           .setToolTip('Grabber for ELog GUI')
         #self.edi_exp   .setToolTip('Experiment')
         self.edi_run   .setToolTip('Use it if posting for specific run\n')
+        self.edi_sbm   .setToolTip('Override the author/submitter\n')
         self.edi_tag   .setToolTip('Edit message tag')
         self.edi_msg   .setToolTip('Message for posting in ELog')
         self.but_reset .setToolTip('Clear graphical window in "Attachement"')
@@ -2146,11 +2155,26 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         if not self.is_valid_message(msg) :
             return
 
+        submitter = self.submitter.value().strip()
+        if not submitter or submitter == "":
+            self.submitter.setValue(self.usr.value())
+            self.edi_sbm.setText(self.usr.value())
+            raise Exception(f"Cannot use a blank submitter; please use a valid userid.")
+        plogger.info(f"Submitting as {submitter}")
+        if submitter and len(submitter) == 6 and submitter.endswith("opr") and (submit_to_instrument_elog or open_JIRA_ticket):
+            raise Exception(f"Cannot submit to instrument elog/JIRA with an operator account. Please override the submitter {submitter}. If you have typed in a valid submitter, it may be that you just need to focus out of the textbox for the changes to take effect.")
+
+        if submitter and not (len(submitter) == 6 and submitter.endswith("opr")):
+            try:
+                pwd.getpwnam(submitter)
+            except KeyError:
+                raise Exception(f"The submitter {submitter} does not exist; please use a valid submitter")
+
         msg_id = 0
         link_2_msg = ""
         if self.lbws is not None :
             plogger.debug("Run %s", run)
-            result = self.lbws.post(msg, run, res, tags, path)
+            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter)
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
@@ -2175,7 +2199,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             log_text = self.get_text_of_msg_parameters(msg, run, res, lst_tag, path)
             logger.info('Instrumental ELog parameterss:'+log_text, self.name )
 
-            result2 = self.lbws2.post(msg, run, res, lst_tag, path)
+            result2 = self.lbws2.post(msg, run, res, lst_tag, path, submitter=submitter)
             msg2_id = self.get_msg_id_from_result(result2, comment='Responce of submission to instrumental ELog: ')
 
         self.on_but_reset()
@@ -2190,8 +2214,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.run.setValue('')
         self.res.setValue('')
         self.msg.setValue('')
+        self.submitter.setValue(self.usr.value())
         self.edi_msg.setText(self.msg.value())
         self.edi_run.setText(self.run.value())
+        self.edi_sbm.setText(self.usr.value())
         self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
         self.__set_dynamic_property__(self.but_elog, "hintNext", False)
         self.__set_dynamic_property__(self.but_grab, "hintNext", True)
