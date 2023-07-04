@@ -1525,7 +1525,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_currexp  = QtWidgets.QPushButton()
         self.but_currexp.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "refresh.svg"))))
         self.but_currexp.setObjectName("setcurexp")
-        self.hi_quality = QtWidgets.QCheckBox('Hi&Q');
+        self.hi_quality = QtWidgets.QCheckBox('Hi&Q')
         self.hi_quality.setObjectName("Post a high quality image with minimal compression.")
         self.but_issue  = QtWidgets.QPushButton()
         self.but_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "bug.svg"))))
@@ -1539,7 +1539,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_help     = QtWidgets.QPushButton('&Help')
         self.but_quit     = QtWidgets.QPushButton('&Exit')
 
+        self.lab_xpost = QtWidgets.QLabel('Cross post to:')
+
         self.setHBox1Layout()
+        self.setHBoxXPost()
         self.setHBox2Layout()
 
         self.lab_exp = QtWidgets.QLabel('Experiment:')
@@ -1591,6 +1594,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.hbox1_widg = QtWidgets.QWidget(self)
         self.hbox1_widg.setLayout(self.hbox1)
 
+        self.xposthbox_widg = QtWidgets.QWidget(self)
+        self.xposthbox_widg.setLayout(self.xposthbox)
+
         self.vbox2 = QtWidgets.QVBoxLayout()
         self.vbox2.addLayout(self.grid)
         self.vbox2_widg = QtWidgets.QWidget(self)
@@ -1598,6 +1604,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         self.vbox = QtWidgets.QVBoxLayout()
         self.vbox.addWidget(self.hbox1_widg)
+        self.vbox.addWidget(self.xposthbox_widg)
         self.vbox.addWidget(self.vbox2_widg)
         self.vbox.addWidget(self.wimg)
         self.vbox.addLayout(self.hbox2)
@@ -1754,7 +1761,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     def setHBox1Layout(self):
         self.hbox1 = QtWidgets.QHBoxLayout()
-        self.hbox1.setObjectName("HBox1");
+        self.hbox1.setObjectName("HBox1")
+        self.hbox1.setContentsMargins(11, 0, 0, 0)
         self.hbox1.addWidget(self.but_grab)
         self.hbox1.addWidget(self.but_load)
         self.hbox1.addWidget(self.but_reset)
@@ -1767,6 +1775,17 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.hbox1.addWidget(self.but_elog)
         #self.setLayout(self.hbox1)
 
+    def setHBoxXPost(self):
+        self.xposthbox = QtWidgets.QHBoxLayout()
+        self.xposthbox.setObjectName("XPost HBox")
+        self.xposthbox.addWidget(self.lab_xpost)
+        for xpostelog in [ "Sample Delivery System", "Laser" ]:
+            ckl = QtWidgets.QLabel(xpostelog)
+            ck = QtWidgets.QCheckBox("")
+            self.xposthbox.addWidget(ckl)
+            self.xposthbox.addWidget(ck)
+            self.xposthbox.addSpacing(20)
+        self.xposthbox.addStretch(1)
 
     def setHBox2Layout(self):
         self.hbox2 = QtWidgets.QHBoxLayout()
