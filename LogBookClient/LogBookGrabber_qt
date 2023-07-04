@@ -2247,6 +2247,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.edi_msg.resetFirstCharacterDone()
         self.edi_msg.setFocus()
         self.hi_quality.setChecked(False)
+        for ck in self.xpost_checkboxes:
+            ck.setChecked(False)
 
 #-----------------------------
 
