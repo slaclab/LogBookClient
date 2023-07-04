@@ -170,6 +170,15 @@ def ws_get_tags (expname, ws_url, user, passwd):
     except requests.exceptions.RequestException as e:
         print("ERROR: failed to get the current experiment info from Web Service due to: ", e)
 
+def ws_xpost_experiments(expname, ws_url, user, passwd):
+    url = ws_url+'/lgbk/' + expname.replace(" ", "_") + '/ws/get_instrument_elogs'
+    authParams = __get_auth_params(ws_url, user, passwd)
+    try:
+        result = requests.get(url, **authParams).json()
+        return result['value']
+    except requests.exceptions.RequestException as e:
+        print("ERROR: failed to get the current experiment info from Web Service due to: ", e)
+    
 #----------------------------------
 #(inst='AMO', exp='amodaq14', run='825', tag='TAG1',
 # msg='EMPTY MESSAGE', fname=None, fname_att=None, resp=None) :
@@ -335,6 +344,8 @@ class LogBookWebService :
         d = ws_get_experiments (None, self.ins, self.url, self.usr, self.pas)
         return list(x.replace(" ", "_") for x in d.keys())
 
+    def get_xpost_experiments(self):
+        return ws_xpost_experiments(self.exp, self.url, self.usr, self.pas)
 
     def get_current_experiment(self) :
         return ws_get_current_experiment (self.ins, self.sta, self.url, self.usr, self.pas)

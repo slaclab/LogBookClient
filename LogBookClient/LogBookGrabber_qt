@@ -1693,6 +1693,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             return all_tags
         return []
 
+    def list_of_xpost_experiments(self) :
+        if self.lbws is not None :
+            return self.lbws.get_xpost_experiments()
+        return []
 
 
     def setLocalPars(self):
@@ -1780,7 +1784,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.xposthbox = QtWidgets.QHBoxLayout()
         self.xposthbox.setObjectName("XPost HBox")
         self.xposthbox.addWidget(self.lab_xpost)
-        for xpostelog in [ "Sample Delivery System", "Laser" ]:
+        for xpostelog in self.list_of_xpost_experiments():
             ckl = QtWidgets.QLabel(xpostelog)
             ck = QtWidgets.QCheckBox("")
             self.xpost_checkboxes.append(ck)
