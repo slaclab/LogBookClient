@@ -202,7 +202,8 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
     if submitter and submitter != '' and submitter != usr:
         payload['author'] = submitter
     if xpost_elogs:
-        payload['xpost'] = [ "post_to_elog_" + x.replace(" ", "_") for x in xpost_elogs]
+        for x in xpost_elogs:
+            payload["post_to_elog_" + x.replace(" ", "_")] = "on"
 
     files = []
     if lst_fname != [''] :
