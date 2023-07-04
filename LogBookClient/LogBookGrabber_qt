@@ -2196,12 +2196,17 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
                 pwd.getpwnam(submitter)
             except KeyError:
                 raise Exception(f"The submitter {submitter} does not exist; please use a valid submitter")
+            
+        xpost_elogs = []
+        for ck in self.xpost_checkboxes:
+            if ck.isChecked():
+                xpost_elogs.append(ck.property("elog"))
 
         msg_id = 0
         link_2_msg = ""
         if self.lbws is not None :
             plogger.debug("Run %s", run)
-            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter)
+            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter, xpost_elogs=xpost_elogs)
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
