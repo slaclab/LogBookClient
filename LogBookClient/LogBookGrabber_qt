@@ -1540,6 +1540,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_quit     = QtWidgets.QPushButton('&Exit')
 
         self.lab_xpost = QtWidgets.QLabel('Cross post to:')
+        self.xpost_checkboxes = []
 
         self.setHBox1Layout()
         self.setHBoxXPost()
@@ -1782,8 +1783,11 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         for xpostelog in [ "Sample Delivery System", "Laser" ]:
             ckl = QtWidgets.QLabel(xpostelog)
             ck = QtWidgets.QCheckBox("")
+            self.xpost_checkboxes.append(ck)
             self.xposthbox.addWidget(ckl)
             self.xposthbox.addWidget(ck)
+            ck.setProperty("elog", xpostelog)
+            ck.stateChanged.connect(self.on_xpost_clicked)
             self.xposthbox.addSpacing(20)
         self.xposthbox.addStretch(1)
 
@@ -2351,6 +2355,12 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         plogger.info("Posting a " + ( "high" if self.hi_quality.isChecked() else "medium" ) + " quality image")
         self.wimg.setHiQualityImage(self.hi_quality.isChecked())
         pass
+
+    def on_xpost_clicked(self):
+        """
+        A cross posting checkbox was clicked
+        """
+        print("Cross posting from " + self.sender().property("elog") + " new state " + str(self.sender().isChecked()))
 
     def help_message(self):
         msg  = '\n' + '='*60
