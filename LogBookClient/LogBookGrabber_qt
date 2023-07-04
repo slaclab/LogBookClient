@@ -2362,7 +2362,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         """
         A cross posting checkbox was clicked
         """
-        print("Cross posting from " + self.sender().property("elog") + " new state " + str(self.sender().isChecked()))
+        # print("Cross posting from " + self.sender().property("elog") + " new state " + str(self.sender().isChecked()))
+        pass
 
     def help_message(self):
         msg  = '\n' + '='*60
