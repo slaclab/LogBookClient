@@ -171,7 +171,7 @@ def ws_get_tags (expname, ws_url, user, passwd):
         print("ERROR: failed to get the current experiment info from Web Service due to: ", e)
 
 def ws_xpost_experiments(expname, ws_url, user, passwd):
-    url = ws_url+'/lgbk/' + expname.replace(" ", "_") + '/ws/get_instrument_elogs'
+    url = ws_url+'/lgbk/' + expname.replace(" ", "_") + '/ws/get_instrument_elogs?include_instrument_elogs=false'
     authParams = __get_auth_params(ws_url, user, passwd)
     try:
         result = requests.get(url, **authParams).json()
