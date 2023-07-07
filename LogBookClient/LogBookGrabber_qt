@@ -2369,7 +2369,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
     def on_xpost_clicked(self):
         """
-        A cross posting checkbox was clicked
+        A cross posting checkbox was clicked; for now not doing much here
         """
         # print("Cross posting from " + self.sender().property("elog") + " new state " + str(self.sender().isChecked()))
         pass

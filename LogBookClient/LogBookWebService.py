@@ -203,7 +203,7 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
         payload['author'] = submitter
     if xpost_elogs:
         for x in xpost_elogs:
-            payload["post_to_elog_" + x.replace(" ", "_")] = "on"
+            payload["post_to_elog_" + x.replace(" ", "_")] = "on" # Some legacy mechanisms here.
 
     files = []
     if lst_fname != [''] :
