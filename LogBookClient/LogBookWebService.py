@@ -183,7 +183,7 @@ def ws_xpost_experiments(expname, ws_url, user, passwd):
 #(inst='AMO', exp='amodaq14', run='825', tag='TAG1',
 # msg='EMPTY MESSAGE', fname=None, fname_att=None, resp=None) :
 
-def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=None, run_num='', msg_id='', msg='', lst_fname=[''], emails=None, submitter=None, xpost_elogs=None):
+def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experiments, lst_tag=None, run_num='', msg_id='', msg='', lst_fname=[''], emails=None, submitter=None, xpost_instrument_elog=False, xpost_elogs=None):
 
     exper_name = exp.replace(" ", "_")
     serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
@@ -204,6 +204,8 @@ def submit_msg_to_elog(ws_url, usr, passwd, ins, sta, exp, cmd, logbook_experime
     if xpost_elogs:
         for x in xpost_elogs:
             payload["post_to_elog_" + x.replace(" ", "_")] = "on" # Some legacy mechanisms here.
+    if xpost_instrument_elog:
+        payload["xpost_instrument_elog"] = True
 
     files = []
     if lst_fname != [''] :
@@ -356,9 +358,9 @@ class LogBookWebService :
     def get_current_run(self) :
         return ws_get_current_run(self.url, self.usr, self.pas, self.exp)
 
-    def post(self, msg='', run='', res='', tag='', att='', submitter=None, xpost_elogs=None) :
+    def post(self, msg='', run='', res='', tag='', att='', submitter=None, xpost_instrument_elog=False, xpost_elogs=None) :
         result = submit_msg_to_elog(self.url, self.usr, self.pas, self.ins, self.sta, self.exp, self.cmd, self.logbook_experiments, \
-                                    msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att], submitter=submitter, xpost_elogs=xpost_elogs)
+                                    msg=msg, run_num=run, msg_id=res, lst_tag=[tag], lst_fname=[att], submitter=submitter, xpost_instrument_elog=xpost_instrument_elog, xpost_elogs=xpost_elogs)
         return  result
 
     def post_followup(self, msg, parent_id) :

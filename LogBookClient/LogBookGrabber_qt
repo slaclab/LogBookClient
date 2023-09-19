@@ -1704,7 +1704,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.submitter.setValue( self.lbws.usr )
         self.ins.setValue( self.lbws.ins )
         self.exp.setValue( self.lbws.exp )
-        self.in2.setValue( self.lbws2.ins )
+        if self.lbws2:
+            self.in2.setValue( self.lbws2.ins )
         self.run.setValue( '' )
         self.res.setValue( '' )
         self.msg.setValue( '' )
@@ -2206,7 +2207,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         link_2_msg = ""
         if self.lbws is not None :
             plogger.debug("Run %s", run)
-            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter, xpost_elogs=xpost_elogs)
+            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter, xpost_instrument_elog=submit_to_instrument_elog, xpost_elogs=xpost_elogs)
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
@@ -2220,19 +2221,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
             #NORMAL: result: {'status': 'success', 'message_id': '125263'}
             #ERROR:  result: {'status': 'error', 'message': 'Run number 285 has not been found. Allowed range of runs is: 2..826.'}
-
-        # Submit copy of the message to the instrument ELog
-        # MMMMMMMMMMMMMMMMM
-        if submit_to_instrument_elog and self.lbws2 is not None :
-            run, res = '', ''
-            lst_tag = tags + " " + exp
-            msg2_id = 0
-
-            log_text = self.get_text_of_msg_parameters(msg, run, res, lst_tag, path)
-            logger.info('Instrumental ELog parameterss:'+log_text, self.name )
-
-            result2 = self.lbws2.post(msg, run, res, lst_tag, path, submitter=submitter)
-            msg2_id = self.get_msg_id_from_result(result2, comment='Responce of submission to instrumental ELog: ')
 
         self.on_but_reset()
 
@@ -2559,26 +2547,9 @@ def run_GUIGrabSubmitELog() :
     #lbws.print_experiments()
 
     #-----------------------------
-    pars2 ={ 'ins'    : 'OPS',
-             'sta'    : sta,
-             'exp'    : ins + ' Instrument',
-             'url'    : opts.url,
-             'usr'    : opts.usr,
-             'pas'    : opts.pas,
-             'cmd'    : opts.cmd
-           }
-
-    print('Open web service for copy messages in the instrumental ELog:')
-    for k,v in list(pars2.items()):
-        if k != 'pas' : print('%9s : %s' % (k,v))
-
-    lbws2 = LogBookWebService(**pars2)
-    #lbws2.print_experiments()
-
-    #-----------------------------
     #app = QtGui.QApplication(sys.argv)
     #w  = GUIGrabSubmitELog.py(**pars)
-    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=lbws2, opts=opts)
+    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=None, opts=opts)
     w.show()
     #w.dumpObjectTree()
     app.exec_()
