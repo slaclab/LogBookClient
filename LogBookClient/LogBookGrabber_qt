@@ -1470,7 +1470,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
     res = LocalParameter ()
     msg = LocalParameter ()
 
-    def __init__ ( self, parent=None, cfname=None, ifname=None, ofname=None, help_msg=None, lbws=None, lbws2=None, opts=None ) :
+    def __init__ ( self, parent=None, cfname=None, ifname=None, ofname=None, help_msg=None, lbws=None, opts=None ) :
         QtWidgets.QWidget.__init__(self)
         self.setGeometry(50, 10, 620, 620)
         self.setWindowTitle('Grubber for ELog')
@@ -1488,7 +1488,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         self.parent     = parent
         self.lbws       = lbws
-        self.lbws2      = lbws2
         self.opts       = opts
         self.count_msgs = 0
 
@@ -1704,8 +1703,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.submitter.setValue( self.lbws.usr )
         self.ins.setValue( self.lbws.ins )
         self.exp.setValue( self.lbws.exp )
-        if self.lbws2:
-            self.in2.setValue( self.lbws2.ins )
         self.run.setValue( '' )
         self.res.setValue( '' )
         self.msg.setValue( '' )
@@ -2549,7 +2546,7 @@ def run_GUIGrabSubmitELog() :
     #-----------------------------
     #app = QtGui.QApplication(sys.argv)
     #w  = GUIGrabSubmitELog.py(**pars)
-    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, lbws2=None, opts=opts)
+    w = GUIGrabSubmitELog(cfname=opts.cfname, lbws=lbws, opts=opts)
     w.show()
     #w.dumpObjectTree()
     app.exec_()
