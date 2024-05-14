@@ -1448,6 +1448,34 @@ class BtnStatusCtxMgr:
             help_dialog_box(self.mainwin, text="Exception during " + self.msg + " " + str(exc_value))
         return True
 
+
+
+class JIRATicketDialog(QtWidgets.QDialog):
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.setWindowTitle("JIRA Ticket")
+        
+        QBtn = QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        self.buttonBox = QtWidgets.QDialogButtonBox(QBtn)
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+
+        self.layout = QtWidgets.QVBoxLayout()
+        self.layout.setSpacing(int(parent.height()*0.05))
+        self.layout.addWidget(QtWidgets.QLabel("If you want to add this as a comment to an existing JIRA ticket, please enter that ticket number\nTo create a new JIRA ticket, simply press OK"))
+        self.jira_ticket = QtWidgets.QLineEdit()
+        self.jira_ticket.setMaximumWidth(int(parent.width()*0.3))
+        self.layout.addWidget(self.jira_ticket)
+
+        self.layout.addWidget(self.buttonBox)
+        self.setLayout(self.layout)
+    
+    def getJIRATicket(self):
+        return self.jira_ticket.text()
+
+
+
 #-----------------------------
 #-----------------------------
 #-----------------------------
@@ -2136,10 +2164,17 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         """
         Log a JIRA issue in addition to submitting to the eLog and instrument eLog.
         """
-        with BtnStatusCtxMgr(self, "Posting to eLog") as s:
-            self.__submit__(True, open_JIRA_ticket=True)
+        dlg = JIRATicketDialog(self)
+        if dlg.exec():
+            existing_JIRA_ticket = dlg.getJIRATicket()
+            if existing_JIRA_ticket and len(existing_JIRA_ticket) > 3:
+                plogger.info("Posting as a comment on existing JIRA ticket %s", existing_JIRA_ticket)
+                with BtnStatusCtxMgr(self, "Posting to eLog") as s:
+                    self.__submit__(True, open_JIRA_ticket=True, existing_JIRA_ticket=existing_JIRA_ticket)
+        else:
+            plogger.info("JIRA ticket cancelled")
 
-    def __submit__(self, submit_to_instrument_elog, open_JIRA_ticket=False):
+    def __submit__(self, submit_to_instrument_elog, open_JIRA_ticket=False, existing_JIRA_ticket=None):
 
         if not self.submission_is_allowed() : return
 
@@ -2158,13 +2193,14 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.msg.setValue(str(self.edi_msg.document().toPlainText()))
 
         exp = self.exp.value()
-        tags = " ".join([re.compile("^#").sub("", x) for x in self.tag.value().split(" ") ])
-        if open_JIRA_ticket:
-            tags = tags + " ISSUE"
-        plogger.debug("Tags: %s ", tags)
         run = self.run.value()
         res = None
         msg = self.msg.value() # str(self.edi_msg.document().toPlainText())
+        tags = " ".join([re.compile("^#").sub("", x) for x in self.tag.value().split(" ") ])
+        if open_JIRA_ticket:
+            tags = tags + " ISSUE"
+
+        plogger.debug("Tags: %s ", tags)
 
         logger.info('2. Submit message to ELog', self.name )
 
@@ -2198,7 +2234,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         link_2_msg = ""
         if self.lbws is not None :
             plogger.debug("Run %s", run)
-            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter, xpost_instrument_elog=submit_to_instrument_elog, xpost_elogs=xpost_elogs)
+            result = self.lbws.post(msg, run, res, tags, path, submitter=submitter, xpost_instrument_elog=submit_to_instrument_elog, xpost_elogs=xpost_elogs, jira_ticket=existing_JIRA_ticket if open_JIRA_ticket else None)
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
             msg_id = self.get_msg_id_from_result(result, comment='')
