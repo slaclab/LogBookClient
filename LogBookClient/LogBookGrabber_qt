@@ -1526,9 +1526,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_currexp.setObjectName("setcurexp")
         self.hi_quality = QtWidgets.QCheckBox('Hi&Q')
         self.hi_quality.setObjectName("Post a high quality image with minimal compression.")
-        self.but_issue  = QtWidgets.QPushButton()
-        self.but_issue.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "bug.svg"))))
-        self.but_issue.setObjectName("Log an issue")
         self.but_jira_issue  = QtWidgets.QPushButton("Submit(+ins)+J&IRA")
         self.but_jira_issue.setObjectName("&Submit (+ ins) (+ JIRA)")
 
@@ -1640,7 +1637,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_logger.clicked.connect(self.on_but_logger)
         self.but_help.clicked.connect(self.on_but_help)
         self.but_quit.clicked.connect(self.on_but_quit)
-        self.but_issue.clicked.connect(self.on_but_daqami_crashed)
         self.but_jira_issue.clicked.connect(self.on_but_jira_issue)
         self.hi_quality.stateChanged.connect(self.on_hiquality_clicked)
         #self.connect(self.but_save_cfg, QtCore.SIGNAL('clicked()'),       self.on_but_save_cfg)
@@ -1734,7 +1730,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_logger.setToolTip('Open/Close logger window')
         self.but_quit  .setToolTip('Save configuration parameters in file \nand exit this application. \n"x"-just exit application.')
         self.but_help  .setToolTip('Get help message \nin the logger window')
-        self.but_issue .setToolTip('<p>Log a DAQ/AMI issue in the computing log</p><p>This provides context and timing to PCDS personnel. This happens in the background and should not interfere with your current activity</p>')
         self.but_jira_issue.setToolTip('<p>In addition to making an eLog entry and posting to the instrument eLog, also log a JIRA issue</p>')
         self.hi_quality.setToolTip('Upload a high quality version of the image with minimal compression. This will increase the attachment size significantly but may preserve details.')
         #self.cbx_more  .setToolTip('Show more control buttons')
@@ -1771,7 +1766,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.hbox1.addWidget(self.but_reset)
         self.hbox1.addWidget(self.but_fsgrab)
         self.hbox1.addWidget(self.hi_quality)
-        self.hbox1.addWidget(self.but_issue)
         self.hbox1.addWidget(self.but_jira_issue)
         self.hbox1.addStretch(1)
         self.hbox1.addWidget(self.but_elog_ins)
@@ -2328,20 +2322,6 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         #logger.info('Help message:' + msg, self.name )
         #print msg
-
-    def on_but_daqami_crashed(self):
-        """
-        Log the fact that the DAQ/AMI crashed. We take a full screen show and post it to the Controls experiment.
-        """
-        fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
-        if( 0 != os.system('import -trim -frame -border -window root %s' % (fname.name))) :
-            plogger.debug("Cannot capture the full screen image")
-            return
-        try:
-            resp = submit_msg_to_elog(self.lbws.url, None, None, "OPS", 0, "Computing", self.opts.cmd, [], lst_tag=[self.exp.getValue(), "AMI_DAQ_Issue"], msg="AMI/DAQ issue in experiment %s %s user %s on machine %s" % (self.exp.getValue(), self.opts.inssta, getpass.getuser(), platform.node()), lst_fname=[fname.name])
-            plogger.debug(resp)
-        except:
-            plogger.exception("Exception posting a DAQ/AMI log message")
 
     def on_hiquality_clicked(self):
         """
