@@ -2171,6 +2171,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
                 plogger.info("Posting as a comment on existing JIRA ticket %s", existing_JIRA_ticket)
                 with BtnStatusCtxMgr(self, "Posting to eLog") as s:
                     self.__submit__(True, open_JIRA_ticket=True, existing_JIRA_ticket=existing_JIRA_ticket)
+            else:
+                with BtnStatusCtxMgr(self, "Posting to eLog") as s:
+                    plogger.info("Creating a new JIRA ticket")
+                    self.__submit__(True, open_JIRA_ticket=True)
         else:
             plogger.info("JIRA ticket cancelled")
 
