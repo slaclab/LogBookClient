@@ -1654,6 +1654,11 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.edi_msg.tagCompleted.connect(self.tagCompleted)
         self.edi_msg.firstCharacter.connect(self.firstCharacterTyped)
 
+        self.edi_sbm.editingFinished.connect(self.onSubmitterChange)
+        self.edi_sbm_timer = QtCore.QTimer()
+        self.edi_sbm_timer.setSingleShot(True)
+        self.edi_sbm_timer.timeout.connect(self.sbm_timer_tick)
+
         self.but_grab.clicked.connect(self.on_but_grab)
         self.but_fsgrab.clicked.connect(self.on_full_screen_grab)
         self.but_reset.clicked.connect(self.on_but_reset)
@@ -1956,6 +1961,18 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         clearTagIfTimeOut(self.edi_tag)
 
 
+    @QtCore.pyqtSlot()
+    def onSubmitterChange(self):
+        self.edi_sbm_timer.stop()
+        self.edi_sbm_timer.start(5*60*1000)
+        plogger.debug("Starting the timer to reset the submitter back to %s", self.usr.value())
+
+    @QtCore.pyqtSlot()
+    def sbm_timer_tick(self):
+        plogger.debug("Setting the submitter back to %s on timeout", self.usr.value())
+        self.edi_sbm.setText(self.usr.value())
+        self.submitter.setValue(self.usr.value())
+
     def updateLocalParMsg(self):
         self.msg.setValue(str(self.edi_msg.document().toPlainText()))
 
@@ -2237,7 +2254,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         msg_id = 0
         link_2_msg = ""
         if self.lbws is not None :
-            plogger.debug("Run %s", run)
+            plogger.debug("Run %s Submitter %s", run, submitter)
             result = self.lbws.post(msg, run, res, tags, path, submitter=submitter, xpost_instrument_elog=submit_to_instrument_elog, xpost_elogs=xpost_elogs, jira_ticket=existing_JIRA_ticket if open_JIRA_ticket else None)
             plogger.debug('Response of submission: %s %s', str(result), self.name )
 
@@ -2265,10 +2282,9 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.run.setValue('')
         self.res.setValue('')
         self.msg.setValue('')
-        self.submitter.setValue(self.usr.value())
         self.edi_msg.setText(self.msg.value())
         self.edi_run.setText(self.run.value())
-        self.edi_sbm.setText(self.usr.value())
+        self.edi_sbm.setText(self.submitter.value())
         self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
         self.__set_dynamic_property__(self.but_elog, "hintNext", False)
         self.__set_dynamic_property__(self.but_grab, "hintNext", True)
