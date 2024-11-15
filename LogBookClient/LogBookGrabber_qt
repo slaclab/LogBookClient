@@ -2237,7 +2237,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             self.edi_sbm.setText(self.usr.value())
             raise Exception(f"Cannot use a blank submitter; please use a valid userid.")
         plogger.info(f"Submitting as {submitter}")
-        if submitter and len(submitter) == 6 and submitter.endswith("opr") and (submit_to_instrument_elog or open_JIRA_ticket):
+        if submitter and len(submitter) == 6 and submitter.endswith("opr") and (submit_to_instrument_elog or "ISSUE" in tags):
             raise Exception(f"Cannot submit to instrument elog/JIRA with an operator account. Please override the submitter {submitter}. If you have typed in a valid submitter, it may be that you just need to focus out of the textbox for the changes to take effect.")
 
         if submitter and not (len(submitter) == 6 and submitter.endswith("opr")):
