@@ -247,7 +247,7 @@ def submit_followup_message(ws_url, usr, passwd, exp, msg, parent_id, lst_fname=
     """
     exper_name = exp.replace(" ", "_")
     serverURL = "{0}/lgbk/{1}/ws/new_elog_entry".format(ws_url, exper_name)
-    payload = { 'log_text': msg, 'parent': parent_id }
+    payload = { 'log_text': msg, 'parent': parent_id, "command_followup": True }
     if submitter and submitter != '' and submitter != usr:
         payload['author'] = submitter
 
