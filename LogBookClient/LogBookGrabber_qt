@@ -1102,15 +1102,23 @@ class GUIImage ( QtWidgets.QLabel ) :
     # Private methods --
     #-------------------
 
+    def isWayland(self):
+        return os.environ.get("XDG_SESSION_TYPE", "x11").lower() == "wayland"
+
     def grabImage(self):
         #self.setMinimumSize(150, 150)
         #fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.ppm')
         fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
         #print fname.name
         #logger.info('Use temporary file: %s' % (fname.name), self.name)
-        if( 0 == os.system('import -trim -frame -border %s' % (fname.name))) :
-            self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-            self.setPixmapForImage()
+        if self.isWayland():
+            if( 0 == os.system('gnome-screenshot --area --file=%s' % (fname.name))) :
+                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                self.setPixmapForImage()
+        else:
+            if( 0 == os.system('import -trim -frame -border %s' % (fname.name))) :
+                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                self.setPixmapForImage()
 
     def grabFullScreen(self):
         #self.setMinimumSize(150, 150)
@@ -1118,9 +1126,14 @@ class GUIImage ( QtWidgets.QLabel ) :
         fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
         #print fname.name
         #logger.info('Use temporary file: %s' % (fname.name), self.name)
-        if( 0 == os.system('import -trim -frame -border -window root %s' % (fname.name))) :
-            self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-            self.setPixmapForImage()
+        if self.isWayland():
+            if( 0 == os.system('gnome-screenshot --file=%s' % (fname.name))) :
+                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                self.setPixmapForImage()
+        else:
+            if( 0 == os.system('import -trim -frame -border -window root %s' % (fname.name))) :
+                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                self.setPixmapForImage()
 
     def grabEntireWindow(self):
         self.r_pixmap = QtGui.QPixmap.grabWindow(QtGui.QApplication.desktop().winId())
