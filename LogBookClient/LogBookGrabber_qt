@@ -1105,6 +1105,9 @@ class GUIImage ( QtWidgets.QLabel ) :
     def isWayland(self):
         return os.environ.get("XDG_SESSION_TYPE", "x11").lower() == "wayland"
 
+    def isKDE(self):
+        return os.environ.get("XDG_SESSION_DESKTOP", "").upper() == "KDE"
+
     def grabImage(self):
         #self.setMinimumSize(150, 150)
         #fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.ppm')
@@ -1112,9 +1115,14 @@ class GUIImage ( QtWidgets.QLabel ) :
         #print fname.name
         #logger.info('Use temporary file: %s' % (fname.name), self.name)
         if self.isWayland():
-            if( 0 == os.system('gnome-screenshot --area --file=%s' % (fname.name))) :
-                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-                self.setPixmapForImage()
+            if self.isKDE():
+                if( 0 == os.system('spectacle --background --nonotify --region --output %s' % (fname.name))) :
+                    self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                    self.setPixmapForImage()
+            else:
+                if( 0 == os.system('gnome-screenshot --area --file=%s' % (fname.name))) :
+                    self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                    self.setPixmapForImage()
         else:
             if( 0 == os.system('import -trim -frame -border %s' % (fname.name))) :
                 self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
@@ -1127,9 +1135,14 @@ class GUIImage ( QtWidgets.QLabel ) :
         #print fname.name
         #logger.info('Use temporary file: %s' % (fname.name), self.name)
         if self.isWayland():
-            if( 0 == os.system('gnome-screenshot --file=%s' % (fname.name))) :
-                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-                self.setPixmapForImage()
+            if self.isKDE():
+                if( 0 == os.system('spectacle --background --nonotify --fullscreen --output %s' % (fname.name))) :
+                    self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                    self.setPixmapForImage()
+            else:
+                if( 0 == os.system('gnome-screenshot --file=%s' % (fname.name))) :
+                    self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
+                    self.setPixmapForImage()
         else:
             if( 0 == os.system('import -trim -frame -border -window root %s' % (fname.name))) :
                 self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
