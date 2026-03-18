@@ -32,6 +32,7 @@ import getpass
 import pwd
 from copy import deepcopy
 from time import time, localtime, strftime, sleep
+from enum import Enum
 
 from datetime import datetime, timedelta
 
@@ -1108,7 +1109,12 @@ class GUIImage ( QtWidgets.QLabel ) :
     def isKDE(self):
         return os.environ.get("XDG_SESSION_DESKTOP", "").upper() == "KDE"
 
-    def grabImage(self):
+    class GrabOptions:
+        REGION = { "spectacle": "--region", "gnome-screenshot": "--area", "import": "" }
+        FULL_SCREEN = { "spectacle": "--fullscreen", "gnome-screenshot": "", "import": "-window root" }
+        SELECTED_WINDOW = { "spectacle": "--activewindow --delay 1000", "gnome-screenshot": "--window", "import": "-window $(xdotool selectwindow)" }
+    
+    def grabImage(self, grab_option=GrabOptions.REGION):
         #self.setMinimumSize(150, 150)
         #fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.ppm')
         fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
@@ -1116,41 +1122,31 @@ class GUIImage ( QtWidgets.QLabel ) :
         #logger.info('Use temporary file: %s' % (fname.name), self.name)
         if self.isWayland():
             if self.isKDE():
-                if( 0 == os.system('spectacle --background --nonotify --region --output %s' % (fname.name))) :
+                grabopts = grab_option["spectacle"]
+                if( 0 == os.system('spectacle --background --nonotify %s --output %s' % (grabopts, fname.name))) :
                     self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
                     self.setPixmapForImage()
             else:
-                if( 0 == os.system('gnome-screenshot --area --file=%s' % (fname.name))) :
+                grabopts = grab_option["gnome-screenshot"]
+                if( 0 == os.system('gnome-screenshot --area %s --file=%s' % (grabopts, fname.name))) :
                     self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
                     self.setPixmapForImage()
         else:
-            if( 0 == os.system('import -trim -frame -border %s' % (fname.name))) :
+            grabopts = grab_option["import"]
+            if( 0 == os.system('import -trim -frame %s -border %s' % (grabopts, fname.name))) :
                 self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
                 self.setPixmapForImage()
+
+
+    def grabRegion(self):
+        return self.grabImage(grab_option=self.GrabOptions.REGION)
 
     def grabFullScreen(self):
-        #self.setMinimumSize(150, 150)
-        #fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.ppm')
-        fname = tempfile.NamedTemporaryFile(mode='r+b',suffix='.png')
-        #print fname.name
-        #logger.info('Use temporary file: %s' % (fname.name), self.name)
-        if self.isWayland():
-            if self.isKDE():
-                if( 0 == os.system('spectacle --background --nonotify --fullscreen --output %s' % (fname.name))) :
-                    self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-                    self.setPixmapForImage()
-            else:
-                if( 0 == os.system('gnome-screenshot --file=%s' % (fname.name))) :
-                    self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-                    self.setPixmapForImage()
-        else:
-            if( 0 == os.system('import -trim -frame -border -window root %s' % (fname.name))) :
-                self.r_pixmap = QtGui.QPixmap(QtGui.QImage(fname.name)) # , format='???'))
-                self.setPixmapForImage()
+        return self.grabImage(grab_option=self.GrabOptions.FULL_SCREEN)
+        
 
-    def grabEntireWindow(self):
-        self.r_pixmap = QtGui.QPixmap.grabWindow(QtGui.QApplication.desktop().winId())
-        self.setPixmapForImage()
+    def grabSelectedWindow(self):
+        return self.grabImage(grab_option=self.GrabOptions.SELECTED_WINDOW)
 
     def setHiQualityImage(self, postHighQualityImages):
         self.postHiQualityImages = postHighQualityImages
@@ -1425,7 +1421,7 @@ class GUIImage ( QtWidgets.QLabel ) :
 def test_GUIImage():
     app = QtGui.QApplication(sys.argv)
     ex  = GUIImage()
-    ex.grabEntireWindow()
+    ex.grabImage(full_screen=True)
     ex.show()
     app.exec_()
 
@@ -1570,10 +1566,11 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.box_exp.addItems(self.list_of_exps)
         self.box_exp.setCurrentIndex(self.exp_ind_in_list)
 
-        self.but_grab     = QtWidgets.QPushButton('&Grab')
+        self.but_grab     = QtWidgets.QPushButton('&Grab region')
+        self.but_wingrab  = QtWidgets.QPushButton('Grab &window')
+        self.but_fsgrab   = QtWidgets.QPushButton('&Full screen grab')
         self.but_load     = QtWidgets.QPushButton('&Load File')
         self.but_reset    = QtWidgets.QPushButton('&Clear Msg')
-        self.but_fsgrab   = QtWidgets.QPushButton('&Full screen grab')
         self.but_save     = QtWidgets.QPushButton('Save img')
         self.but_currexp  = QtWidgets.QPushButton()
         self.but_currexp.setIcon(QtGui.QIcon(os.path.abspath(os.path.join(__file__, "..", "..", "static", "refresh.svg"))))
@@ -1687,6 +1684,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
 
         self.but_grab.clicked.connect(self.on_but_grab)
         self.but_fsgrab.clicked.connect(self.on_full_screen_grab)
+        self.but_wingrab.clicked.connect(self.on_window_grab)
         self.but_reset.clicked.connect(self.on_but_reset)
         self.but_load.clicked.connect(self.on_but_load)
         self.but_save.clicked.connect(self.on_but_save)
@@ -1779,7 +1777,8 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.edi_tag   .setToolTip('Edit message tag')
         self.edi_msg   .setToolTip('Message for posting in ELog')
         self.but_reset .setToolTip('Clear graphical window in "Attachement"')
-        self.but_grab  .setToolTip('Grab image of current monitor')
+        self.but_grab  .setToolTip('Grab image of selected region')
+        self.but_wingrab.setToolTip('Grab image of selected window')
         self.but_load  .setToolTip('Load image from file')
         self.but_fsgrab.setToolTip('Grab an image of the entire screen')
         self.but_save  .setToolTip('Save image in file')
@@ -1810,6 +1809,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.but_save    .setIcon(cp.icon_save)
         self.but_fsgrab  .setIcon(cp.icon_browser)
         self.but_grab    .setIcon(cp.icon_monitor)
+        self.but_wingrab .setIcon(cp.icon_window)
         self.but_reset   .setIcon(cp.icon_reset)
         self.but_logger  .setIcon(cp.icon_contents)
         self.but_help    .setIcon(cp.icon_help)
@@ -1821,9 +1821,10 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
         self.hbox1.setObjectName("HBox1")
         self.hbox1.setContentsMargins(11, 0, 0, 0)
         self.hbox1.addWidget(self.but_grab)
+        self.hbox1.addWidget(self.but_wingrab)
+        self.hbox1.addWidget(self.but_fsgrab)
         self.hbox1.addWidget(self.but_load)
         self.hbox1.addWidget(self.but_reset)
-        self.hbox1.addWidget(self.but_fsgrab)
         self.hbox1.addWidget(self.hi_quality)
         self.hbox1.addWidget(self.but_jira_issue)
         self.hbox1.addStretch(1)
@@ -2083,7 +2084,7 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             with BtnStatusCtxMgr(self, "Grabbing window") as s:
                 self.repaint()
                 #------------
-                self.wimg.grabImage()
+                self.wimg.grabRegion()
                 self.showImage(is_visible=True)
                 self.set_but_save_visibility()
                 self.set_but_reset()
@@ -2112,6 +2113,23 @@ class GUIGrabSubmitELog ( QtWidgets.QWidget ) :
             self.__set_dynamic_property__(self.but_grab, "hintNext", False)
             self.__set_dynamic_property__(self.but_elog, "hintNext", True)
 
+
+    def on_window_grab(self):
+        logger.info('Grab image of selected window', self.name)
+        if self.wimg != None :
+            with BtnStatusCtxMgr(self, "Grabbing selected window") as s:
+                self.repaint()
+                #------------
+                self.wimg.grabSelectedWindow()
+                self.showImage(is_visible=True)
+                self.set_but_save_visibility()
+                self.set_but_reset()
+                #------------
+
+            plogger.debug("Restarting the tag expiration timer")
+            self.edi_tag.setProperty("expiration_time", datetime.now() + timedelta(seconds=self.tag_timeouts[self.tag_timeout_index]*60))
+            self.__set_dynamic_property__(self.but_grab, "hintNext", False)
+            self.__set_dynamic_property__(self.but_elog, "hintNext", True)
 
     def on_but_reset(self):
         if self.wimg.isVisible() :

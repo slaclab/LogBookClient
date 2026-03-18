@@ -30,7 +30,7 @@ class Config(object):
     
     def __init__(self, config=None, heading='DEFAULT'):
         self.heading = heading
-        self.cf = configparser.SafeConfigParser(defaults=self.defaults)
+        self.cf = configparser.ConfigParser(defaults=self.defaults)
        
         if config:
             files = self.cf.read(config)
