@@ -1112,7 +1112,7 @@ class GUIImage ( QtWidgets.QLabel ) :
     class GrabOptions:
         REGION = { "spectacle": "--region", "gnome-screenshot": "--area", "import": "" }
         FULL_SCREEN = { "spectacle": "--fullscreen", "gnome-screenshot": "", "import": "-window root" }
-        SELECTED_WINDOW = { "spectacle": "--activewindow --delay 1000", "gnome-screenshot": "--window", "import": "-window $(xdotool selectwindow)" }
+        SELECTED_WINDOW = { "spectacle": "--activewindow --no-decoration --delay 1000", "gnome-screenshot": "--window", "import": "-window $(xdotool selectwindow)" }
     
     def grabImage(self, grab_option=GrabOptions.REGION):
         #self.setMinimumSize(150, 150)
